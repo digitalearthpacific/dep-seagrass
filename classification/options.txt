@@ -1,1 +1,5 @@
-
+Random Forest
+SVM
+Logistic regression
+Others on scikit learn
+Test them all!!!
