@@ -3,3 +3,41 @@ SVM
 Logistic regression
 Others on scikit learn
 Test them all!!!
+
+
+AdaBoostClassifier
+
+AdaBoostRegressor
+
+BaggingClassifier
+
+BaggingRegressor
+
+ExtraTreesClassifier
+
+ExtraTreesRegressor
+
+GradientBoostingClassifier
+
+GradientBoostingRegressor
+
+HistGradientBoostingClassifier
+
+HistGradientBoostingRegressor
+
+IsolationForest
+
+RandomForestClassifier
+
+RandomForestRegressor
+
+RandomTreesEmbedding
+
+StackingClassifier
+
+StackingRegressor
+
+VotingClassifier
+
+VotingRegressor
+
