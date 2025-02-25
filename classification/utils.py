@@ -16,7 +16,7 @@ def load_data(items, bbox):
         items,
         measurements=[
             "red", "green", "blue", "nir08", "swir16", "scl", 
-            "coastal", "nir09", "cloud", "rededge1", 
+            "coastal", "nir09", "rededge1", 
             "rededge3", "rededge2", "nir"
         ],
         bbox=bbox,
