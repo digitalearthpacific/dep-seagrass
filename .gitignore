@@ -1,4 +1,4 @@
 *.tif
 *.pyc
-*.zarr
+.zarr
 .ipynb_checkpoints
