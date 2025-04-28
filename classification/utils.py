@@ -1,6 +1,6 @@
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
-
+import numpy as np
 
 def load_data(items, bbox):
     """
@@ -61,7 +61,11 @@ def calculate_band_indices(data):
     data["b_r"] = data["blue"] / data["red"]
     data["mci"] = data["nir"] / data["rededge1"]
     data["ndci"] = (data["rededge1"] - data["red"]) / (data["rededge1"] + data["red"])
+    # additional indices from SDB (Alex)*
+    data['stumpf'] = np.log(np.abs(data.green - data.blue)) / np.log(data.green + data.blue)
+    data["ln_bg"] = np.log(data.blue / data.green)
 
+    
     return data
 
 
@@ -127,6 +131,12 @@ def do_prediction(ds, model, output_name: str | None = None):
     # TODO: Make sure that each column is labelled with the correct band name
     stacked_arrays = stacked_arrays.squeeze().fillna(0).transpose()
 
+    # Remove the all-zero rows
+    zero_mask = (df == 0).all(axis=1)  # Creates a boolean Series
+    non_zero_df = df.loc[~zero_mask]  # Filters out all-zero rows
+
+    # Create a new array to hold the predictions
+    full_pred = pd.Series(np.nan, index=df.index)
     # Predict the classes
     predicted = model.predict(stacked_arrays)
 
