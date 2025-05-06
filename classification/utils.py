@@ -65,8 +65,68 @@ def calculate_band_indices(data):
     data['stumpf'] = np.log(np.abs(data.green - data.blue)) / np.log(data.green + data.blue)
     data["ln_bg"] = np.log(data.blue / data.green)
 
-    
     return data
+
+        
+# def mask_deeps_stumpf(
+#     ds: Dataset,
+#     ds_to_mask: Dataset | None = None,
+#     threshold: float = 2.25,  # 2.0 is more conservative
+#     return_mask: bool = False,
+# ) -> Dataset:
+#     """Masks out deep water pixels based on the Stumpf index.
+
+#     Args:
+#         ds (Dataset): Dataset to mask
+#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
+#         threshold (float | None, optional): Threshold for the Stumpf index. Defaults to 1.9.
+#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
+
+#     Returns:
+#         Dataset: Masked dataset
+#     """
+#     mask = ds.stumpf > threshold
+#     mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
+
+#     return apply_mask(ds, mask, ds_to_mask, return_mask)
+
+
+# def mask_deeps_ln_bg(
+#     ds: Dataset,
+#     ds_to_mask: Dataset | None = None,
+#     threshold: float = 0.2,
+#     return_mask: bool = False,
+# ) -> Dataset:
+#     """Masks out deep water pixels based on the natural log of the blue/green
+
+#     Args:
+#         ds (Dataset): Dataset to mask
+#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
+#         threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.2.
+#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
+
+#     Returns:
+#         Dataset: Masked dataset
+#     """
+#     mask = ds.ln_bg < threshold
+#     mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
+
+#     return apply_mask(ds, mask, ds_to_mask, return_mask)
+
+
+# def mask_deeps(
+#     ds: Dataset,
+#     ds_to_mask: Dataset | None = None,
+#     return_mask: bool = False,
+#     stumpf_threshold: float = 2.0,
+#     ln_bg_threshold: float = 0.2,
+# ) -> Dataset:
+#     _, mask_stumpf = mask_deeps_stumpf(ds, threshold=stumpf_threshold, return_mask=True)
+#     _, mask_ln_bg = mask_deeps_ln_bg(ds, threshold=ln_bg_threshold, return_mask=True)
+
+#     mask = mask_stumpf | mask_ln_bg
+
+#     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 
 def scale(data):
@@ -106,7 +166,6 @@ def apply_masks(data):
 
     return masked_data
 
-
 def do_prediction(ds, model, output_name: str | None = None):
     """Predicts the model on the dataset and adds the prediction as a new variable.
 
@@ -131,12 +190,6 @@ def do_prediction(ds, model, output_name: str | None = None):
     # TODO: Make sure that each column is labelled with the correct band name
     stacked_arrays = stacked_arrays.squeeze().fillna(0).transpose()
 
-    # Remove the all-zero rows
-    zero_mask = (df == 0).all(axis=1)  # Creates a boolean Series
-    non_zero_df = df.loc[~zero_mask]  # Filters out all-zero rows
-
-    # Create a new array to hold the predictions
-    full_pred = pd.Series(np.nan, index=df.index)
     # Predict the classes
     predicted = model.predict(stacked_arrays)
 
