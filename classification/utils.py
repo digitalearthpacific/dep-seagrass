@@ -67,67 +67,6 @@ def calculate_band_indices(data):
 
     return data
 
-        
-# def mask_deeps_stumpf(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     threshold: float = 2.25,  # 2.0 is more conservative
-#     return_mask: bool = False,
-# ) -> Dataset:
-#     """Masks out deep water pixels based on the Stumpf index.
-
-#     Args:
-#         ds (Dataset): Dataset to mask
-#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
-#         threshold (float | None, optional): Threshold for the Stumpf index. Defaults to 1.9.
-#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
-
-#     Returns:
-#         Dataset: Masked dataset
-#     """
-#     mask = ds.stumpf > threshold
-#     mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
-
-#     return apply_mask(ds, mask, ds_to_mask, return_mask)
-
-
-# def mask_deeps_ln_bg(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     threshold: float = 0.2,
-#     return_mask: bool = False,
-# ) -> Dataset:
-#     """Masks out deep water pixels based on the natural log of the blue/green
-
-#     Args:
-#         ds (Dataset): Dataset to mask
-#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
-#         threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.2.
-#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
-
-#     Returns:
-#         Dataset: Masked dataset
-#     """
-#     mask = ds.ln_bg < threshold
-#     mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
-
-#     return apply_mask(ds, mask, ds_to_mask, return_mask)
-
-
-# def mask_deeps(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     return_mask: bool = False,
-#     stumpf_threshold: float = 2.0,
-#     ln_bg_threshold: float = 0.2,
-# ) -> Dataset:
-#     _, mask_stumpf = mask_deeps_stumpf(ds, threshold=stumpf_threshold, return_mask=True)
-#     _, mask_ln_bg = mask_deeps_ln_bg(ds, threshold=ln_bg_threshold, return_mask=True)
-
-#     mask = mask_stumpf | mask_ln_bg
-
-#     return apply_mask(ds, mask, ds_to_mask, return_mask)
-
 
 def scale(data):
     """
@@ -154,14 +93,20 @@ def apply_masks(data):
     xr.Dataset: The dataset after applying the masks.
     """
     mndwi = (data["green"] - data["swir16"]) / (data["green"] + data["swir16"])
-    mndwi_land_mask = mndwi > 0
+    # Major land mask
+    # mndwi_land_mask = mndwi > 0
+    # Conservative land mask
+    mndwi_land_mask = mndwi > -0.35
     masked_data = data.where(mndwi_land_mask)
     ndti = (masked_data["red"] - masked_data["green"]) / (
         masked_data["red"] + masked_data["green"]
     )
     ndti_mask = ndti < 0.2
     masked_data = masked_data.where(ndti_mask)
-    nir_mask = masked_data["nir"] < 0.085
+    # Major NIR mask 
+    # nir_mask = masked_data["nir"] < 0.085
+    # Conservative NIR mask
+    nir_mask = masked_data["nir"] < 0.8
     masked_data = masked_data.where(nir_mask)
 
     return masked_data
