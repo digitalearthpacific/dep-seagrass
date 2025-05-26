@@ -1,6 +1,6 @@
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
-
+import numpy as np
 
 def load_data(items, bbox):
     """
@@ -61,6 +61,9 @@ def calculate_band_indices(data):
     data["b_r"] = data["blue"] / data["red"]
     data["mci"] = data["nir"] / data["rededge1"]
     data["ndci"] = (data["rededge1"] - data["red"]) / (data["rededge1"] + data["red"])
+    # additional indices from SDB (Alex)*
+    # data['stumpf'] = np.log(np.abs(data.green - data.blue)) / np.log(data.green + data.blue)
+    data["ln_bg"] = np.log(data.blue / data.green)
 
     return data
 
@@ -90,18 +93,25 @@ def apply_masks(data):
     xr.Dataset: The dataset after applying the masks.
     """
     mndwi = (data["green"] - data["swir16"]) / (data["green"] + data["swir16"])
-    mndwi_land_mask = mndwi > 0
+    # Major land mask
+    # mndwi_land_mask = mndwi > 0
+    # Moderate land mask
+    # mdnwi_land_mask = mndwi > -0.35
+    # Minor land mask
+    mndwi_land_mask = mndwi > -0.5
     masked_data = data.where(mndwi_land_mask)
     ndti = (masked_data["red"] - masked_data["green"]) / (
         masked_data["red"] + masked_data["green"]
     )
     ndti_mask = ndti < 0.2
     masked_data = masked_data.where(ndti_mask)
-    nir_mask = masked_data["nir"] < 0.085
+    # Major NIR mask 
+    # nir_mask = masked_data["nir"] < 0.085
+    # Conservative NIR mask
+    nir_mask = masked_data["nir"] < 0.8
     masked_data = masked_data.where(nir_mask)
 
     return masked_data
-
 
 def do_prediction(ds, model, output_name: str | None = None):
     """Predicts the model on the dataset and adds the prediction as a new variable.
