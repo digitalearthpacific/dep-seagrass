@@ -187,19 +187,19 @@ def patchwise_glcm_feature(
                 symmetric=True,
                 normed=True
             )
-            # contrast[i, j] = graycoprops(glcm, 'contrast')[0, 0]
-            # homogeneity[i, j] = graycoprops(glcm, 'homogeneity')[0, 0]
-            # energy[i, j] = graycoprops(glcm, 'energy')[0, 0]
+            contrast[i, j] = graycoprops(glcm, 'contrast')[0, 0]
+            homogeneity[i, j] = graycoprops(glcm, 'homogeneity')[0, 0]
+            energy[i, j] = graycoprops(glcm, 'energy')[0, 0]
             mean[i, j] = graycoprops(glcm, 'mean')[0, 0]
-            # correlation[i, j] = graycoprops(glcm, 'correlation')[0, 0]
-            # glcm_p = glcm[:, :, 0, 0]
-            # entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+            correlation[i, j] = graycoprops(glcm, 'correlation')[0, 0]
+            glcm_p = glcm[:, :, 0, 0]
+            entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
 
     return {
-        # 'contrast': contrast,
-        # 'homogeneity': homogeneity,
-        # 'entropy': entropy,
-        # 'energy': energy,
-        # 'correlation': correlation,
+        'contrast': contrast,
+        'homogeneity': homogeneity,
+        'entropy': entropy,
+        'energy': energy,
+        'correlation': correlation,
         'mean': mean
     }
