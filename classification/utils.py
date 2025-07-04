@@ -1,6 +1,9 @@
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
 import numpy as np
+from skimage.feature import graycomatrix, graycoprops
+from skimage import data
+from skimage.util import view_as_windows
 
 def load_data(items, bbox):
     """
@@ -154,3 +157,49 @@ def do_prediction(ds, model, output_name: str | None = None):
         return predicted_da
     else:
         return predicted_da.to_dataset(name=output_name)
+
+
+def patchwise_glcm_feature(
+    image_blue, window_size=9, levels=256
+):
+
+    pad = window_size // 2
+    padded = np.pad(image_blue, pad, mode='reflect')
+    windows = view_as_windows(padded, (window_size, window_size))
+    H, W = windows.shape[:2]
+
+    # Pre-allocate feature arrays
+    contrast = np.zeros((H, W), dtype=np.float32)
+    homogeneity = np.zeros((H, W), dtype=np.float32)
+    entropy = np.zeros((H, W), dtype=np.float32)
+    energy = np.zeros((H, W), dtype=np.float32)
+    correlation = np.zeros((H, W), dtype=np.float32)
+    mean = np.zeros((H, W), dtype=np.float32)
+
+    for i in range(H):
+        for j in range(W):
+            patch = windows[i, j].astype('uint8')  # Ensure patch is uint8
+            glcm = graycomatrix(
+                patch,
+                distances=[1],
+                angles=[0],
+                levels=levels,
+                symmetric=True,
+                normed=True
+            )
+            contrast[i, j] = graycoprops(glcm, 'contrast')[0, 0]
+            homogeneity[i, j] = graycoprops(glcm, 'homogeneity')[0, 0]
+            energy[i, j] = graycoprops(glcm, 'energy')[0, 0]
+            mean[i, j] = graycoprops(glcm, 'mean')[0, 0]
+            correlation[i, j] = graycoprops(glcm, 'correlation')[0, 0]
+            glcm_p = glcm[:, :, 0, 0]
+            entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+
+    return {
+        'contrast': contrast,
+        'homogeneity': homogeneity,
+        'entropy': entropy,
+        'energy': energy,
+        'correlation': correlation,
+        'mean': mean
+    }
