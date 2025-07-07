@@ -207,3 +207,4 @@ def do_prediction(ds, model, output_name: str | None = None):
         return predicted_da
     else:
         return predicted_da.to_dataset(name=output_name)
+
