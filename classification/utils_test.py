@@ -265,7 +265,7 @@ def threshold_calc_ds(band, level=None):
     std = band.std().compute().item()
     
     thresh_moderate = mean
-    thresh_minor = mean + std
+    thresh_minor = mean + (std/2)
     thresh_major = mean - std
 
     # Default to "Low" if level is None or not provided
