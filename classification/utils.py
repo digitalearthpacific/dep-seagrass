@@ -22,7 +22,7 @@ from odc.stac import load
 from pystac.client import Client
 from skimage.feature import graycomatrix, graycoprops
 
-def load_data(items, bbox):
+def load_data(items, bands, bbox):
     """
     Load data into a dataset with specified measurements and configurations.
 
@@ -35,7 +35,7 @@ def load_data(items, bbox):
     """
     data = load(
         items,
-        measurements=[
+        bands=[
             "nir",
             "red",
             "blue",
