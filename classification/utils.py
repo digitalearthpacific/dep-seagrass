@@ -1,3 +1,71 @@
+# utils.py
+
+# Standard library imports (alphabetical within category is good practice)
+from datetime import datetime
+
+# Third-party library imports
+import folium
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import planetary_computer
+import pystac_client
+import pyproj # Imported pyproj to get CRS
+import rasterio as rio
+import rioxarray
+import xarray as xr
+from ipyleaflet import basemaps
+from numpy.lib.stride_tricks import sliding_window_view
+from odc.stac import load
+from pystac.client import Client
+from shapely import box
+from shapely.geometry import Polygon
+from skimage.feature import graycomatrix, graycoprops
+
+# --- Re-export commonly used objects/modules ---
+# This list explicitly defines what names will be available when you do
+# 'from utils import ...'. It's good practice for clarity.
+# Note: For `pyproj.CRS`, we import `pyproj` then re-export `CRS` directly.
+__all__ = [
+    # Re-exported modules/objects
+    "datetime",
+    "Polygon",
+    "box",
+    "CRS", # Re-exporting CRS directly from pyproj
+    "folium",
+    "gpd",
+    "np",
+    "pd",
+    "rio",
+    "xr",
+    "rioxarray",
+    "basemaps",
+    "sliding_window_view",
+    "pystac_client",
+    "planetary_computer",
+    "load", # odc.stac.load
+    "Client", # pystac.client.Client
+    "graycomatrix",
+    "graycoprops",
+
+    # Your custom utility functions (assuming their definitions are below)
+    "scale",
+    "do_prediction",
+    "calculate_band_indices",
+    "apply_masks",
+    "threshold_calc_land",
+    "threshold_calc_ds"
+]
+
+# Explicitly import CRS from pyproj to make it available for re-export
+from pyproj import CRS
+
+# --- Your Custom Utility Functions ---
+# Paste the actual definitions of your functions here.
+# These are just placeholders:
+
+
+
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
 import numpy as np
