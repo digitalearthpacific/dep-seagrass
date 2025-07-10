@@ -1,70 +1,3 @@
-# utils.py
-
-# Standard library imports (alphabetical within category is good practice)
-from datetime import datetime
-
-# Third-party library imports
-import folium
-import geopandas as gpd
-import numpy as np
-import pandas as pd
-import planetary_computer
-import pystac_client
-import pyproj # Imported pyproj to get CRS
-import rasterio as rio
-import rioxarray
-import xarray as xr
-from ipyleaflet import basemaps
-from numpy.lib.stride_tricks import sliding_window_view
-from odc.stac import load
-from pystac.client import Client
-from shapely import box
-from shapely.geometry import Polygon
-from skimage.feature import graycomatrix, graycoprops
-
-# --- Re-export commonly used objects/modules ---
-# This list explicitly defines what names will be available when you do
-# 'from utils import ...'. It's good practice for clarity.
-# Note: For `pyproj.CRS`, we import `pyproj` then re-export `CRS` directly.
-__all__ = [
-    # Re-exported modules/objects
-    "datetime",
-    "Polygon",
-    "box",
-    "CRS", # Re-exporting CRS directly from pyproj
-    "folium",
-    "gpd",
-    "np",
-    "pd",
-    "rio",
-    "xr",
-    "rioxarray",
-    "basemaps",
-    "sliding_window_view",
-    "pystac_client",
-    "planetary_computer",
-    "load", # odc.stac.load
-    "Client", # pystac.client.Client
-    "graycomatrix",
-    "graycoprops",
-
-    # Your custom utility functions (assuming their definitions are below)
-    "scale",
-    "do_prediction",
-    "calculate_band_indices",
-    "apply_masks",
-    "threshold_calc_land",
-    "threshold_calc_ds"
-]
-
-# Explicitly import CRS from pyproj to make it available for re-export
-from pyproj import CRS
-
-# --- Your Custom Utility Functions ---
-# Paste the actual definitions of your functions here.
-# These are just placeholders:
-
-
 
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
@@ -72,6 +5,22 @@ import numpy as np
 from skimage.feature import graycomatrix, graycoprops
 from skimage import data
 from skimage.util import view_as_windows
+from shapely import box
+from datetime import datetime
+from shapely.geometry import Polygon
+from pyproj import CRS 
+import folium
+import geopandas as gpd
+import pandas as pd
+import rasterio as rio
+import rioxarray
+from ipyleaflet import basemaps
+from numpy.lib.stride_tricks import sliding_window_view
+import pystac_client
+import planetary_computer
+from odc.stac import load
+from pystac.client import Client
+from skimage.feature import graycomatrix, graycoprops
 
 def load_data(items, bbox):
     """
@@ -183,6 +132,74 @@ def apply_masks(data):
     masked_data = masked_data.where(nir_mask)
 
     return masked_data
+
+def elevation_mask(
+    asset_href: str,
+    bbox: tuple,
+    elevation_threshold: float = 10.0,
+    bbox_crs: str = "EPSG:4326", # CRS of the input bbox tuple
+    target_dem_crs: str = "EPSG:3832" # Target CRS for DEM and clipping polygon
+) -> xr.DataArray:
+    """
+    Masks a Digital Elevation Model (DEM) based on an elevation threshold
+    within a specified bounding box.
+
+    Args: 
+    1. asset_href (str): URL or local path to the DEM raster asset.
+    2. bbox (tuple): Bounding box as (min_x, min_y, max_x, max_y). This tuple is assumed to be in `bbox_crs`.
+    3. elevation_threshold (float): Elevation value (in the DEM's units, typically meters) below which to retain data.
+    4. bbox_crs (str): The CRS (e.g., "EPSG:4326") of the input `bbox` tuple. Defaults to "EPSG:4326" (longitude/latitude). Advise to be reprojected to 3832 afterwards, 
+    5. target_dem_crs (str): The CRS (e.g., "EPSG:3832") to which the DEM and
+                              
+    Returns:
+        xarray.DataArray: The masked DEM data, where areas above the
+                          elevation threshold are set to NaN. The data will be
+                          in `target_dem_crs`.
+    """
+    # 1. Create shapely polygon from the input bbox
+    # This polygon is initially in `bbox_crs`
+    bbox_polygon_original_crs = box(*bbox)
+
+    # 2. Load the DEM asset
+    dem = rioxarray.open_rasterio(asset_href).squeeze()
+
+    # 3. Ensure DEM has a CRS and reproject it to the target_dem_crs
+    if dem.rio.crs is None:
+        print(f"Warning: DEM has no CRS specified. Assuming {target_dem_crs} for initial operations.")
+        # Attempt to assign CRS if missing; if it's incorrect, subsequent reprojection might fail.
+        # It's better if the source DEM inherently has its CRS defined.
+        dem = dem.rio.write_crs(target_dem_crs)
+    elif str(dem.rio.crs) != target_dem_crs:
+        print(f"Reprojecting DEM from {dem.rio.crs} to {target_dem_crs} for consistency...")
+        dem = dem.rio.reproject(target_dem_crs)
+
+    # 4. Reproject the clipping polygon to match the target_dem_crs
+    # This is crucial to ensure the clipping geometry is in the same CRS as the DEM
+    bbox_polygon_for_clip = bbox_polygon_original_crs
+    if bbox_crs != target_dem_crs:
+        print(f"Reprojecting clipping polygon from {bbox_crs} to {target_dem_crs}...")
+        # Use geopandas to reproject the shapely polygon
+        gdf = gpd.GeoSeries([bbox_polygon_original_crs], crs=bbox_crs)
+        bbox_polygon_for_clip = gdf.to_crs(target_dem_crs).iloc[0]
+
+    # 5. Clip the DEM using the reprojected polygon
+    # The `crs` argument here specifies the CRS of the `geometries` being passed.
+    dem_clipped = dem.rio.clip([bbox_polygon_for_clip], crs=target_dem_crs, drop=True)
+
+    # 6. Apply the elevation mask
+    # The original code `masked = dem.where(dem <= elevation_threshold)`
+    # means "keep values that are less than or equal to the threshold,
+    # and set others (greater than threshold) to NaN".
+    # We apply this to the clipped DEM.
+    masked_dem = dem_clipped.where(dem_clipped <= elevation_threshold)
+
+    # 7. Compute the result to bring it into memory (if it's a Dask array)
+    # This ensures the result is ready for immediate use.
+    masked_dem = masked_dem.compute()
+
+    return masked_dem
+
+
 
 def do_prediction(ds, model, output_name: str | None = None):
     """Predicts the model on the dataset and adds the prediction as a new variable.
