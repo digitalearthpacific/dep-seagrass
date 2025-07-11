@@ -244,30 +244,52 @@ def do_prediction(ds, model, output_name: str | None = None):
     else:
         return predicted_da.to_dataset(name=output_name)
 
+# def glcm_features(patch):
+#     # --- Handle RuntimeWarning (keep these checks as they are good practice) ---
+#     # This addresses cases where patches are uniform or contain NaNs.
+#     if np.all(np.isnan(patch)) or (np.nanmax(patch) == np.nanmin(patch) and not np.isnan(np.nanmax(patch))):
+#         # Return default values for the 4 features you want: contrast, homogeneity, energy, correlation
+#         return np.array([0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+
+#     try:
+#         glcm_input = patch.astype(np.uint8)
+#     except ValueError:
+#         # If conversion to uint8 fails (e.g., due to remaining NaNs/infs), return defaults
+#         print("Warning: Failed to convert patch to uint8 for GLCM. Returning defaults.")
+#         return np.array([0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+
+#     # --- GLCM Calculation ---
+#     glcm = graycomatrix(glcm_input, distances=[1], angles=[0, np.pi/4, np.pi/2, 3*np.pi/4],
+#                         levels=np.max(glcm_input) + 1 if glcm_input.size > 0 else 256,
+#                         symmetric=True, normed=True)
+
+#     # --- Initialize 'out' for the DESIRED features ---
+#     out = np.zeros(6, dtype=np.float32) # <--- THIS MUST BE 6!
+
+#     # --- Assign GLCM properties ---
+#     out[0] = graycoprops(glcm, "contrast")[0, 0]
+#     out[1] = graycoprops(glcm, "homogeneity")[0, 0]
+#     out[2] = graycoprops(glcm, "energy")[0, 0]
+#     out[3] = graycoprops(glcm, "ASM")[0, 0]
+#     out[4] = graycoprops(glcm, "correlation")[0, 0]
+#     out[5] = graycoprops(glcm, "mean")[0, 0]
+
+#     return out
+
+WINDOW_SIZE = 9
+LEVELS = 32
+
+# Your patch function
 def glcm_features(patch):
-    # --- Handle RuntimeWarning (keep these checks as they are good practice) ---
-    # This addresses cases where patches are uniform or contain NaNs.
-    if np.all(np.isnan(patch)) or (np.nanmax(patch) == np.nanmin(patch) and not np.isnan(np.nanmax(patch))):
-        # Return default values for the 4 features you want: contrast, homogeneity, energy, correlation
-        return np.array([0.0, 1.0, 1.0, 0.0], dtype=np.float32)
-
-    try:
-        glcm_input = patch.astype(np.uint8)
-    except ValueError:
-        # If conversion to uint8 fails (e.g., due to remaining NaNs/infs), return defaults
-        print("Warning: Failed to convert patch to uint8 for GLCM. Returning defaults.")
-        return np.array([0.0, 1.0, 1.0, 0.0], dtype=np.float32)
-
-    # --- GLCM Calculation ---
-    glcm = graycomatrix(glcm_input, distances=[1], angles=[0, np.pi/4, np.pi/2, 3*np.pi/4],
-                        levels=np.max(glcm_input) + 1 if glcm_input.size > 0 else 256,
-                        symmetric=True, normed=True)
-
-    # --- Initialize 'out' for the DESIRED features ---
-    # You want 'contrast', 'homogeneity', 'energy', 'correlation'. That's 4 features.
-    out = np.zeros(5, dtype=np.float32) # <--- THIS MUST BE 4!
-
-    # --- Assign GLCM properties ---
+    glcm = graycomatrix(
+        patch,
+        distances=[1],
+        angles=[0],
+        levels=LEVELS,
+        symmetric=True,
+        normed=True
+    )
+    out = np.empty(7, dtype=np.float32)
     out[0] = graycoprops(glcm, "contrast")[0, 0]
     out[1] = graycoprops(glcm, "homogeneity")[0, 0]
     out[2] = graycoprops(glcm, "energy")[0, 0]
@@ -275,69 +297,10 @@ def glcm_features(patch):
     out[4] = graycoprops(glcm, "correlation")[0, 0]
     out[5] = graycoprops(glcm, "mean")[0, 0]
 
+            
+            # glcm_p = glcm[:, :, 0, 0]
+            # entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+    
+    glcm_p = glcm[:, :, 0, 0]
+    out[6] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
     return out
-
-def threshold_calc_land(band, level=None):
-    """
-    Calculates threshold for a band.
-
-    Parameters:
-    band (xr.DataArray): The input band as an xarray DataArray.
-    level (str, optional): Threshold level, must be one of 'High', 'Mid', or 'Low'. Defaults to 'Low' if not provided.
-
-    Returns:
-    float: The calculated threshold value for the specified level.
-    """
-
-    # mean 
-    mean = band.mean().compute().item() 
-    # standard deviation
-    std = band.std().compute().item()
-    
-    thresh_moderate = mean
-    thresh_minor = mean - std
-    thresh_major = mean + std
-
-    # Default to "Low" if level is None or not provided
-    if level is None or level == "Low":
-        return round(thresh_minor, 3)
-    elif level == "Mid":
-        return round(thresh_moderate, 3)
-    elif level == "High":
-        return round(thresh_major, 3)
-    else:
-        raise ValueError("level must be one of: 'High', 'Mid', or 'Low'")
-
-
-def threshold_calc_ds(band, level=None):
-    """
-    Calculates threshold for a band.
-
-    Parameters:
-    band (xr.DataArray): The input band as an xarray DataArray.
-    level (str, optional): Threshold level, must be one of 'High', 'Mid', or 'Low'. Defaults to 'Low' if not provided.
-
-    Returns:
-    float: The calculated threshold value for the specified level.
-    """
-
-    # mean 
-    mean = band.mean().compute().item() 
-    # standard deviation
-    std = band.std().compute().item()
-    
-    thresh_moderate = mean
-    thresh_minor = mean + std
-    thresh_major = mean - std
-
-    # Default to "Low" if level is None or not provided
-    if level is None or level == "Low":
-        return round(thresh_minor, 3)
-    elif level == "Mid":
-        return round(thresh_moderate, 3)
-    elif level == "High":
-        return round(thresh_major, 3)
-    else:
-        raise ValueError("level must be one of: 'High', 'Mid', or 'Low'")
-
-    
