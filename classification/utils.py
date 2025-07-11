@@ -76,6 +76,9 @@ def calculate_band_indices(data):
     data["ndti"] = (data["red"] - data["green"]) / (data["red"] + data["green"])
     data["cai"] = (data["coastal"] - data["blue"]) / (data["coastal"] + data["blue"])
     data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
+    data["evi"] = (2.5 * scaled["nir"] - scaled["red"]) / (
+#     scaled["nir"] + (6 * scaled["red"]) - (7.5 * scaled["blue"]) + 1
+    data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
     data["ndwi"] = (data["green"] - data["nir"]) / (data["green"] + data["nir"])
     data["b_g"] = data["blue"] / data["green"]
     data["b_r"] = data["blue"] / data["red"]
