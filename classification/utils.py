@@ -76,16 +76,14 @@ def calculate_band_indices(data):
     data["ndti"] = (data["red"] - data["green"]) / (data["red"] + data["green"])
     data["cai"] = (data["coastal"] - data["blue"]) / (data["coastal"] + data["blue"])
     data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
-    data["evi"] = (2.5 * scaled["nir"] - scaled["red"]) / (
-#     scaled["nir"] + (6 * scaled["red"]) - (7.5 * scaled["blue"]) + 1
-    data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
+    data["nir"] + (6 * data["red"]) - (7.5 * data["blue"] + 1)
+    data["evi"] = (2.5 * data["nir"] - data["red"]) / (data["nir"] + (6 * data["red"]) - (7.5 * data["blue"]) + 1)
+    data["savi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
     data["ndwi"] = (data["green"] - data["nir"]) / (data["green"] + data["nir"])
     data["b_g"] = data["blue"] / data["green"]
     data["b_r"] = data["blue"] / data["red"]
     data["mci"] = data["nir"] / data["rededge1"]
     data["ndci"] = (data["rededge1"] - data["red"]) / (data["rededge1"] + data["red"])
-    # additional indices from SDB (Alex)*
-    # data['stumpf'] = np.log(np.abs(data.green - data.blue)) / np.log(data.green + data.blue)
     data["ln_bg"] = np.log(data.blue / data.green)
 
     return data
@@ -303,10 +301,10 @@ def threshold_calc_land(band, level=None):
     # Default to "Low" if level is None or not provided
     if level is None or level == "Low":
         return round(thresh_minor, 3)
-    elif level == "High":
-        return round(thresh_major, 3)
     elif level == "Mid":
         return round(thresh_moderate, 3)
+    elif level == "High":
+        return round(thresh_major, 3)
     else:
         raise ValueError("level must be one of: 'High', 'Mid', or 'Low'")
 
@@ -335,10 +333,10 @@ def threshold_calc_ds(band, level=None):
     # Default to "Low" if level is None or not provided
     if level is None or level == "Low":
         return round(thresh_minor, 3)
-    elif level == "High":
-        return round(thresh_major, 3)
     elif level == "Mid":
         return round(thresh_moderate, 3)
+    elif level == "High":
+        return round(thresh_major, 3)
     else:
         raise ValueError("level must be one of: 'High', 'Mid', or 'Low'")
 
