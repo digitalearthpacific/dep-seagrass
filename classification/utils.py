@@ -113,26 +113,26 @@ def apply_masks(data):
     Returns:
     xr.Dataset: The dataset after applying the masks.
     """
-    mndwi = (data["green"] - data["swir16"]) / (data["green"] + data["swir16"])
+    # mndwi = (data["green"] - data["swir16"]) / (data["green"] + data["swir16"])
     # Major land mask
     # mndwi_land_mask = mndwi > 0
     # Moderate land mask
     # mdnwi_land_mask = mndwi > -0.35
     # Minor land mask
-    mndwi_land_mask = mndwi > -0.5
-    masked_data = data.where(mndwi_land_mask)
-    ndti = (masked_data["red"] - masked_data["green"]) / (
-        masked_data["red"] + masked_data["green"]
-    )
-    ndti_mask = ndti < 0.2
-    masked_data = masked_data.where(ndti_mask)
-    # Major NIR mask 
-    # nir_mask = masked_data["nir"] < 0.085
-    # Conservative NIR mask
-    nir_mask = masked_data["nir"] < 0.8
-    masked_data = masked_data.where(nir_mask)
+    # mndwi_land_mask = mndwi > -0.5
+    # masked_data = data.where(mndwi_land_mask)
+    # ndti = (masked_data["red"] - masked_data["green"]) / (
+    #     masked_data["red"] + masked_data["green"]
+    # )
+    # ndti_mask = ndti < 0.2
+    # masked_data = masked_data.where(ndti_mask)
+    # # Major NIR mask 
+    # # nir_mask = masked_data["nir"] < 0.085
+    # # Conservative NIR mask
+    # nir_mask = masked_data["nir"] < 0.8
+    # masked_data = masked_data.where(nir_mask)
 
-    return masked_data
+    # return masked_data
 
 def elevation_mask(
     asset_href: str,
