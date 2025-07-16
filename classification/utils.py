@@ -219,7 +219,7 @@ def do_prediction(ds, model, output_name: str | None = None):
     Returns:
         Dataset: Dataset with the prediction as a new variable
     """
-    mask = ds.red.isnull()  # Probably should check more bands
+    # mask = ds.red.isnull()  # Probably should check more bands
 
     # Convert to a stacked array of observations
     stacked_arrays = ds.to_array().stack(dims=["y", "x"])
@@ -242,7 +242,7 @@ def do_prediction(ds, model, output_name: str | None = None):
     predicted_da = xr.DataArray(array, coords={"y": ds.y, "x": ds.x}, dims=["y", "x"])
 
     # Mask the prediction with the original mask
-    predicted_da = predicted_da.where(~mask).compute()
+    # predicted_da = predicted_da.where(~mask).compute()
 
     # If we have a name, return dataset, else the dataarray
     if output_name is None:
