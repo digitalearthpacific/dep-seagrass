@@ -148,7 +148,7 @@ def mask_land(
 def mask_deeps(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
-    threshold: float = 0.2,
+    threshold: float = 0,
     return_mask: bool = False,
 ) -> Dataset:
     """Masks out deep water pixels based on the natural log of the blue/green
@@ -162,27 +162,51 @@ def mask_deeps(
     Returns:
         Dataset: Masked dataset
     """
-    deeps = ds.ln_bg < threshold
-    mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
+    mask = ds.ln_bg < threshold
+    # mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
 
-    return apply_mask(ds, deeps, ds_to_mask, return_mask)
+    return apply_mask(ds, mask, ds_to_mask, return_mask)
 
-
-def mask(
+def mask_elevation(
     ds: Dataset,
-    mask: land & ln_bg_mask & masked_dem,
     ds_to_mask: Dataset | None = None,
+    threshold: float = 10,
     return_mask: bool = False,
 ) -> Dataset:
-    """Applies a mask to a dataset"""
-    to_mask = ds if ds_to_mask is None else ds_to_mask
-    masked = to_mask.where(mask)
 
-    if return_mask:
-        return masked, mask
-    else:
-        return masked
+    e84_catalog = "https://earth-search.aws.element84.com/v1/"
+    e84_client = Client.open(e84_catalog)
+    collection = "cop-dem-glo-30"
+    
+    items = e84_client.search(
+        collections=[collection],
+        bbox=list(ds.odc.geobox.geographic_extent.boundingbox)
+    ).item_collection()
+    
+    # Using geobox means it will load the elevation data the same shape as the other data
+    elevation = load(items, measurements=["data"], geobox=ds.odc.geobox).squeeze()
 
+
+    
+    # True where data is above 10m elevation
+    mask = elevation.data < threshold
+    
+    return apply_mask(ds, mask, ds_to_mask, return_mask)
+
+
+
+def all_masks(
+    ds: Dataset,
+    return_mask: bool = False,
+) -> Dataset:
+    _, land_mask = mask_land(ds, return_mask = True)
+    _, deeps_mask = mask_deeps(ds, return_mask = True)
+    _, elevation_mask = mask_elevation(ds, return_mask = True)
+    
+    mask = land_mask & deeps_mask & elevation_mask
+
+    return apply_mask(ds, mask, None, return_mask)
+    
 
 def do_prediction(ds, model, output_name: str | None = None):
     """Predicts the model on the dataset and adds the prediction as a new variable.
