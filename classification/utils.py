@@ -45,7 +45,7 @@ def load_data(items, bands, bbox):
             "emad",
             "smad",
             "bcmad",
-            "count",
+            # "count",
             "green",
             "nir08",
             "nir09",
@@ -219,7 +219,7 @@ def do_prediction(ds, model, output_name: str | None = None):
     Returns:
         Dataset: Dataset with the prediction as a new variable
     """
-    # mask = ds.red.isnull()  # Probably should check more bands
+    mask = ds.red.isnull()  # Probably should check more bands
 
     # Convert to a stacked array of observations
     stacked_arrays = ds.to_array().stack(dims=["y", "x"])
