@@ -148,7 +148,7 @@ def mask_land(
 def mask_deeps(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
-    threshold: float = 0,
+    threshold: float = -0.02,
     return_mask: bool = False,
 ) -> Dataset:
     """Masks out deep water pixels based on the natural log of the blue/green
