@@ -280,3 +280,55 @@ def glcm_features(patch):
     glcm_p = glcm[:, :, 0, 0]
     out[6] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
     return out
+
+
+
+def output(
+    classification_da: xr.DataArray,
+    target_class_id: int,
+    output_dtype: str = 'float32',
+    nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
+) -> xr.DataArray:
+    """
+"""
+
+    # 1. Boolean mask for the target class
+    target_class = (classification_da == target_class_id)
+
+    # 2. Boolean mask for all non-NaN (classified) pixels
+    is_classified = classification_da.notnull()
+
+    # 3. Handle NaN.
+    binary_output_float = xr.full_like(classification_da, np.nan, dtype=float)
+
+    # 4. Set target class to 1.0 where target_class is True
+    binary_output_float = xr.where(target_class, 1.0, binary_output_float)
+
+    # 5. Set other classified areas to 0.0
+    #    Other marine benethic habitats but not NaNs.
+    binary_output_float = xr.where(is_classified & ~target_class, 0.0, binary_output_float)
+
+    # 6. Handle final dtype conversion and NoData value
+    if output_dtype in ['uint8', 'int8', 'int16', 'int32', 'int64']:
+        # Check if the nodata_value is valid for the chosen dtype
+        dtype_info = np.iinfo(output_dtype)
+        if not (dtype_info.min <= nodata_value <= dtype_info.max):
+            print(f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
+                  f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
+                  f"This might lead to unexpected results or data wrapping.")
+
+        print(f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}.")
+        # Replace NaNs with the specified nodata_value 
+        final_output = binary_output_float.fillna(nodata_value).astype(output_dtype)
+        # Add nodata attributes for GeoTIFF writing, crucial for GIS software
+        final_output.attrs['_FillValue'] = nodata_value
+        final_output.attrs['nodata'] = nodata_value # Common attribute for geospatial data
+    else: # For float types, NaN is the natural nodata
+        final_output = binary_output_float.astype(output_dtype)
+        # Ensure _FillValue is set if there's an original nodata value in the input
+        if '_FillValue' in classification_da.attrs:
+            final_output.attrs['_FillValue'] = classification_da.attrs['_FillValue']
+        elif 'nodata' in classification_da.attrs:
+            final_output.attrs['nodata'] = classification_da.attrs['nodata']
+
+    return final_output
