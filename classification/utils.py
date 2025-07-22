@@ -334,3 +334,81 @@ def output(
             final_output.attrs['nodata'] = classification_da.attrs['nodata']
 
     return final_output
+
+def probability(
+    ds: xr.Dataset,
+    model, 
+    bands: list[str],
+    target_class_id: int, 
+    nodata_value: int = 255, 
+    # scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
+) -> xr.DataArray:
+    """
+    Makes an xarray.Dataset that includes the probability of seagrass
+    """
+
+    if not isinstance(ds, xr.Dataset):
+        raise TypeError("Input 'ds' must be an xarray.Dataset.")
+    if target_class_id not in model.classes_:
+        raise ValueError(f"Target class ID {target_class_id} not found in model classes: {model.classes_}")
+
+    print(f"Generating probability raster for class ID: {target_class_id}")
+
+    # 1. Select the relevant bands and stack spatial dimensions
+    features_ds = ds[bands]
+    features_stacked = features_ds.stack(pixel=['y', 'x'])
+
+    # 2. Convert to a Pandas DataFrame to easily handle NaNs
+    features_df = features_stacked.to_dataframe()
+
+    # Store the original index (pixel coordinates) before dropping NaNs/nodata_value
+    original_pixel_index = features_df.index
+
+    # Ensure all features are numeric before dropping NaNs
+    features_df_numeric = features_df.apply(pd.to_numeric, errors='coerce')
+    features_for_prediction_df = features_df_numeric.dropna()
+
+    # Filter out rows where all feature values are equal to nodata_value
+    if nodata_value is not None and not np.isnan(nodata_value):
+        is_not_nodata_mask = (features_for_prediction_df != nodata_value).any(axis=1)
+        features_for_prediction_df = features_for_prediction_df[is_not_nodata_mask]
+
+    # Store the index of the valid (non-NaN, non-nodata) pixels that will be predicted
+    valid_pixel_index = features_for_prediction_df.index
+
+    # Convert the DataFrame to a NumPy array for sklearn
+    features_for_prediction_np = features_for_prediction_df.values
+
+    # 3. Get probabilities for all classes
+    probabilities_np = model.predict_proba(features_for_prediction_np)
+
+    # Find the index of the target class in the model's output
+    target_class_index = list(model.classes_).index(target_class_id)
+
+    # Extract probabilities for the target class
+    target_class_probabilities_1d = probabilities_np[:, target_class_index]
+
+    # 4. Create an empty DataArray with NaNs, matching the original spatial dimensions
+    # This ensures that areas that were originally NaN (and thus dropped for prediction)
+    # remain NaN in the output probability raster.
+    # Use float dtype for probabilities
+    probability_da = xr.full_like(ds[bands[0]], np.nan, dtype=float)
+    probability_da.name = f'probability_class_{target_class_id}'
+
+    # Fill the valid pixels with their predicted probabilities
+    probability_da.loc[valid_pixel_index] = target_class_probabilities_1d
+
+    # 5. Scale to 0-100 if requested
+    if scale_to_100:
+        probability_da = probability_da * 100
+
+    # 6. Copy georeferencing attributes from a source band
+    # This assumes the first band in `bands` list (`ds[bands[0]]`) has correct georeferencing
+    probability_da.attrs = ds[bands[0]].attrs
+    # Ensure CRS is maintained if using rioxarray
+    # if hasattr(ds[bands[0]], 'rio'):
+    #     probability_da = probability_da.rio.write_crs(ds[bands[0]].rio.crs)
+    #     probability_da = probability_da.rio.write_transform(ds[bands[0]].rio.transform())
+
+    print("Probability raster generation complete.")
+    return probability_da
