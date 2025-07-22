@@ -337,14 +337,42 @@ def output(
 
 def probability(
     ds: xr.Dataset,
-    model, 
-    bands: list[str],
-    target_class_id: int, 
-    nodata_value: int = 255, 
-    # scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
+    model, # Your trained scikit-learn model (e.g., RandomForestClassifier)
+    bands: list[str], # List of band names to use as features
+    target_class_id: int, # The class ID for which to return probabilities
+    no_data_value: int = 255, # Value used for no-data in your input data (if applicable)
+    scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
 ) -> xr.DataArray:
     """
-    Makes an xarray.Dataset that includes the probability of seagrass
+    Generates a probability raster for a specific target class from a trained
+    Random Forest classifier.
+
+    - Pixels that were originally NoData (NaN or `no_data_value`) will remain NaN in the output.
+    - Probabilities will range from 0.0 to 1.0 (or 0 to 100 if `scale_to_100` is True).
+
+    Parameters:
+    - ds (xr.Dataset): The input xarray Dataset containing the bands for prediction.
+                       Expected to have spatial dimensions (e.g., 'x', 'y').
+    - model: The trained scikit-learn classifier model.
+    - bands (list[str]): A list of string names of the bands/variables in `ds`
+                         to be used as features for prediction.
+    - target_class_id (int): The integer ID of the class for which to generate
+                             the probability raster (e.g., 4 for seagrass).
+    - no_data_value (int): The integer value representing no-data in the input bands.
+                           Pixels with this value will be excluded from prediction
+                           and remain as NaN in the output.
+    - scale_to_100 (bool): If True, probabilities will be scaled from 0-1 to 0-100.
+
+    Returns:
+    - xr.DataArray: An xarray DataArray containing the probability for the
+                    `target_class_id`, with original spatial dimensions and georeferencing.
+                    Values are floats.
+
+    Raises:
+    - ValueError: If the `target_class_id` is not found in the model's classes,
+                  or if the number of input features (bands) does not match
+                  what the model was trained on.
+    - TypeError: If `ds` is not an xarray Dataset.
     """
 
     if not isinstance(ds, xr.Dataset):
@@ -361,16 +389,16 @@ def probability(
     # 2. Convert to a Pandas DataFrame to easily handle NaNs
     features_df = features_stacked.to_dataframe()
 
-    # Store the original index (pixel coordinates) before dropping NaNs/nodata_value
+    # Store the original index (pixel coordinates) before dropping NaNs/no_data_value
     original_pixel_index = features_df.index
 
     # Ensure all features are numeric before dropping NaNs
     features_df_numeric = features_df.apply(pd.to_numeric, errors='coerce')
     features_for_prediction_df = features_df_numeric.dropna()
 
-    # Filter out rows where all feature values are equal to nodata_value
-    if nodata_value is not None and not np.isnan(nodata_value):
-        is_not_nodata_mask = (features_for_prediction_df != nodata_value).any(axis=1)
+    # Filter out rows where all feature values are equal to no_data_value
+    if no_data_value is not None and not np.isnan(no_data_value):
+        is_not_nodata_mask = (features_for_prediction_df != no_data_value).any(axis=1)
         features_for_prediction_df = features_for_prediction_df[is_not_nodata_mask]
 
     # Store the index of the valid (non-NaN, non-nodata) pixels that will be predicted
@@ -378,6 +406,17 @@ def probability(
 
     # Convert the DataFrame to a NumPy array for sklearn
     features_for_prediction_np = features_for_prediction_df.values
+
+    # --- NEW CHECK FOR FEATURE COUNT ---
+    expected_features = model.n_features_in_
+    actual_features = features_for_prediction_np.shape[1]
+    if actual_features != expected_features:
+        raise ValueError(
+            f"Feature count mismatch: Input data has {actual_features} features "
+            f"but the model expects {expected_features} features. "
+            f"Please ensure the 'bands' list matches the features used during model training."
+        )
+    # --- END NEW CHECK ---
 
     # 3. Get probabilities for all classes
     probabilities_np = model.predict_proba(features_for_prediction_np)
