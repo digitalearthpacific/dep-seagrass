@@ -335,12 +335,130 @@ def output(
 
     return final_output
 
+# def probability(
+#     ds: xr.Dataset,
+#     model, # Your trained scikit-learn model (e.g., RandomForestClassifier)
+#     bands: list[str], # List of band names to use as features
+#     target_class_id: int, # The class ID for which to return probabilities
+#     no_data_value: int = 255, # Value used for no-data in your input data (if applicable)
+#     scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
+# ) -> xr.DataArray:
+#     """
+#     Generates a probability raster for a specific target class from a trained
+#     Random Forest classifier.
+
+#     - Pixels that were originally NoData (NaN or `no_data_value`) will remain NaN in the output.
+#     - Probabilities will range from 0.0 to 1.0 (or 0 to 100 if `scale_to_100` is True).
+
+#     Parameters:
+#     - ds (xr.Dataset): The input xarray Dataset containing the bands for prediction.
+#                        Expected to have spatial dimensions (e.g., 'x', 'y').
+#     - model: The trained scikit-learn classifier model.
+#     - bands (list[str]): A list of string names of the bands/variables in `ds`
+#                          to be used as features for prediction.
+#     - target_class_id (int): The integer ID of the class for which to generate
+#                              the probability raster (e.g., 4 for seagrass).
+#     - no_data_value (int): The integer value representing no-data in the input bands.
+#                            Pixels with this value will be excluded from prediction
+#                            and remain as NaN in the output.
+#     - scale_to_100 (bool): If True, probabilities will be scaled from 0-1 to 0-100.
+
+#     Returns:
+#     - xr.DataArray: An xarray DataArray containing the probability for the
+#                     `target_class_id`, with original spatial dimensions and georeferencing.
+#                     Values are floats.
+
+#     Raises:
+#     - ValueError: If the `target_class_id` is not found in the model's classes,
+#                   or if the number of input features (bands) does not match
+#                   what the model was trained on.
+#     - TypeError: If `ds` is not an xarray Dataset.
+#     """
+
+#     if not isinstance(ds, xr.Dataset):
+#         raise TypeError("Input 'ds' must be an xarray.Dataset.")
+#     if target_class_id not in model.classes_:
+#         raise ValueError(f"Target class ID {target_class_id} not found in model classes: {model.classes_}")
+
+#     print(f"Generating probability raster for class ID: {target_class_id}")
+
+#     # 1. Select the relevant bands and stack spatial dimensions
+#     features_ds = ds[bands]
+#     features_stacked = features_ds.stack(pixel=['y', 'x'])
+
+#     # 2. Convert to a Pandas DataFrame to easily handle NaNs
+#     features_df = features_stacked.to_dataframe()
+
+#     # Store the original index (pixel coordinates) before dropping NaNs/no_data_value
+#     original_pixel_index = features_df.index
+
+#     # Ensure all features are numeric before dropping NaNs
+#     features_df_numeric = features_df.apply(pd.to_numeric, errors='coerce')
+#     features_for_prediction_df = features_df_numeric.dropna()
+
+#     # Filter out rows where all feature values are equal to no_data_value
+#     if no_data_value is not None and not np.isnan(no_data_value):
+#         is_not_nodata_mask = (features_for_prediction_df != no_data_value).any(axis=1)
+#         features_for_prediction_df = features_for_prediction_df[is_not_nodata_mask]
+
+#     # Store the index of the valid (non-NaN, non-nodata) pixels that will be predicted
+#     valid_pixel_index = features_for_prediction_df.index
+
+#     # Convert the DataFrame to a NumPy array for sklearn
+#     features_for_prediction_np = features_for_prediction_df.values
+
+#     # --- NEW CHECK FOR FEATURE COUNT ---
+#     expected_features = model.n_features_in_
+#     actual_features = features_for_prediction_np.shape[1]
+#     if actual_features != expected_features:
+#         raise ValueError(
+#             f"Feature count mismatch: Input data has {actual_features} features "
+#             f"but the model expects {expected_features} features. "
+#             f"Please ensure the 'bands' list matches the features used during model training."
+#         )
+#     # --- END NEW CHECK ---
+
+#     # 3. Get probabilities for all classes
+#     probabilities_np = model.predict_proba(features_for_prediction_np)
+
+#     # Find the index of the target class in the model's output
+#     target_class_index = list(model.classes_).index(target_class_id)
+
+#     # Extract probabilities for the target class
+#     target_class_probabilities_1d = probabilities_np[:, target_class_index]
+
+#     # 4. Create an empty DataArray with NaNs, matching the original spatial dimensions
+#     # This ensures that areas that were originally NaN (and thus dropped for prediction)
+#     # remain NaN in the output probability raster.
+#     # Use float dtype for probabilities
+#     probability_da = xr.full_like(ds[bands[0]], np.nan, dtype=float)
+#     probability_da.name = f'probability_class_{target_class_id}'
+
+#     # Fill the valid pixels with their predicted probabilities
+#     probability_da.loc[valid_pixel_index] = target_class_probabilities_1d
+
+#     # 5. Scale to 0-100 if requested
+#     if scale_to_100:
+#         probability_da = probability_da * 100
+
+#     # 6. Copy georeferencing attributes from a source band
+#     # This assumes the first band in `bands` list (`ds[bands[0]]`) has correct georeferencing
+#     probability_da.attrs = ds[bands[0]].attrs
+#     # Ensure CRS is maintained if using rioxarray
+#     # if hasattr(ds[bands[0]], 'rio'):
+#     #     probability_da = probability_da.rio.write_crs(ds[bands[0]].rio.crs)
+#     #     probability_da = probability_da.rio.write_transform(ds[bands[0]].rio.transform())
+
+#     print("Probability raster generation complete.")
+#     return probability_da
+
+
 def probability(
     ds: xr.Dataset,
     model, # Your trained scikit-learn model (e.g., RandomForestClassifier)
     bands: list[str], # List of band names to use as features
     target_class_id: int, # The class ID for which to return probabilities
-    no_data_value: int = 255, # Value used for no-data in your input data (if applicable)
+    no_data_value: int = -9999, # Value used for no-data in your input data (if applicable)
     scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
 ) -> xr.DataArray:
     """
@@ -382,22 +500,76 @@ def probability(
 
     print(f"Generating probability raster for class ID: {target_class_id}")
 
-    # 1. Select the relevant bands and stack spatial dimensions
-    features_ds = ds[bands]
-    features_stacked = features_ds.stack(pixel=['y', 'x'])
+    # --- DEBUGGING START ---
+    print(f"DEBUG: 'bands' list provided to function: {bands}")
+    print(f"DEBUG: Length of 'bands' list provided: {len(bands)}")
+    # --- DEBUGGING END ---
 
-    # 2. Convert to a Pandas DataFrame to easily handle NaNs
+    # --- NEW FIX: Ensure spatial coordinates are numeric (float) ---
+    # Create a copy of the dataset to avoid modifying the original in-place
+    # This also ensures that if 'time' is a dimension, it's handled correctly
+    # by ensuring its coordinate is numeric if present.
+    ds_copy = ds.copy()
+    
+    # Check and convert 'y' coordinate
+    if 'y' in ds_copy.coords and ds_copy['y'].dtype.kind not in ['i', 'f']: # if not integer or float
+        print(f"DEBUG: Converting 'y' coordinate from {ds_copy['y'].dtype} to float.")
+        ds_copy['y'] = ds_copy['y'].astype(float)
+    
+    # Check and convert 'x' coordinate
+    if 'x' in ds_copy.coords and ds_copy['x'].dtype.kind not in ['i', 'f']: # if not integer or float
+        print(f"DEBUG: Converting 'x' coordinate from {ds_copy['x'].dtype} to float.")
+        ds_copy['x'] = ds_copy['x'].astype(float)
+
+    # Check and convert 'time' coordinate if it exists and is not numeric/datetime
+    if 'time' in ds_copy.coords and ds_copy['time'].dtype.kind not in ['i', 'f', 'M']: # M for datetime64
+        print(f"DEBUG: Converting 'time' coordinate from {ds_copy['time'].dtype} to datetime64[ns].")
+        # Use pandas.to_datetime for robust conversion of time-like strings/objects
+        ds_copy['time'] = pd.to_datetime(ds_copy['time'].values)
+    # --- END NEW FIX ---
+
+    # 1. Select the relevant bands and stack spatial dimensions
+    features_ds = ds_copy[bands] # Selects only the specified bands from the potentially modified copy
+    
+    # Check if 'time' is a dimension in features_ds. If so, stack it as well
+    # to flatten all samples across time and space.
+    stack_dims = ['y', 'x']
+    if 'time' in features_ds.dims:
+        stack_dims.insert(0, 'time') # Add time as the first dimension to stack
+
+    features_stacked = features_ds.stack(pixel=stack_dims)
+
+
+    # 2. Convert to a Pandas DataFrame
     features_df = features_stacked.to_dataframe()
+
+    # --- NEW FIX: Explicitly drop coordinate columns that might appear as data columns ---
+    # This addresses the issue where to_dataframe() might promote index levels
+    # (like y, x, time, spatial_ref) to regular columns if they are also coordinates.
+    # We only want the actual feature bands.
+    # Only drop columns that are actually present in the DataFrame's columns
+    columns_to_drop = [col for col in ["y", "x", "time", "spatial_ref"] if col in features_df.columns]
+    if columns_to_drop:
+        features_df = features_df.drop(columns=columns_to_drop)
+    # --- END NEW FIX ---
+
+    # --- DEBUGGING START ---
+    print(f"DEBUG: Columns of features_df (after dropping coordinates, before NaNs/no_data): {features_df.columns.tolist()}")
+    print(f"DEBUG: Number of columns in features_df (after dropping coordinates): {len(features_df.columns)}")
+    # --- DEBUGGING END ---
 
     # Store the original index (pixel coordinates) before dropping NaNs/no_data_value
     original_pixel_index = features_df.index
 
     # Ensure all features are numeric before dropping NaNs
-    features_df_numeric = features_df.apply(pd.to_numeric, errors='coerce')
-    features_for_prediction_df = features_df_numeric.dropna()
+    features_for_prediction_df = features_df.apply(pd.to_numeric, errors='coerce')
+    features_for_prediction_df = features_for_prediction_df.dropna()
 
     # Filter out rows where all feature values are equal to no_data_value
     if no_data_value is not None and not np.isnan(no_data_value):
+        # Create a boolean mask where at least one feature is NOT the no_data_value
+        # This handles cases where some bands might have valid data while others are nodata
+        # For simplicity, we assume if ANY band is no_data_value, the pixel is nodata.
         is_not_nodata_mask = (features_for_prediction_df != no_data_value).any(axis=1)
         features_for_prediction_df = features_for_prediction_df[is_not_nodata_mask]
 
@@ -410,6 +582,13 @@ def probability(
     # --- NEW CHECK FOR FEATURE COUNT ---
     expected_features = model.n_features_in_
     actual_features = features_for_prediction_np.shape[1]
+    
+    # --- DEBUGGING START ---
+    print(f"DEBUG: Shape of features_for_prediction_np (after processing): {features_for_prediction_np.shape}")
+    print(f"DEBUG: Model expects {expected_features} features (model.n_features_in_).")
+    print(f"DEBUG: Actual features in input data (from features_for_prediction_np): {actual_features}.")
+    # --- DEBUGGING END ---
+
     if actual_features != expected_features:
         raise ValueError(
             f"Feature count mismatch: Input data has {actual_features} features "
@@ -427,15 +606,34 @@ def probability(
     # Extract probabilities for the target class
     target_class_probabilities_1d = probabilities_np[:, target_class_index]
 
-    # 4. Create an empty DataArray with NaNs, matching the original spatial dimensions
-    # This ensures that areas that were originally NaN (and thus dropped for prediction)
-    # remain NaN in the output probability raster.
-    # Use float dtype for probabilities
-    probability_da = xr.full_like(ds[bands[0]], np.nan, dtype=float)
+    # --- NEW FIX: Map probabilities back using unstacking ---
+    # Create a temporary DataArray with the probabilities and the valid pixel index
+    temp_prob_1d_da = xr.DataArray(
+        target_class_probabilities_1d,
+        coords={'pixel': valid_pixel_index}, # Use the MultiIndex as the coordinate
+        dims=['pixel']
+    )
+
+    # Unstack the 'pixel' dimension back into original spatial dimensions (e.g., 'y', 'x' or 'time', 'y', 'x')
+    # This creates a DataArray with probabilities in the correct spatial locations.
+    # It will have NaNs where pixels were originally dropped.
+    # The dimensions for unstacking should match those used in features_stacked.stack()
+    unstacked_prob_da = temp_prob_1d_da.unstack('pixel')
+
+    # Create the final probability_da with the full original grid from ds_copy[bands[0]]
+    # and then update it with the unstacked probabilities.
+    # This ensures that areas that were originally masked out but not part of valid_pixel_index
+    # (e.g., outside the original data extent or areas that were purely NaN) remain NaN.
+    # Use ds_copy[bands[0]] as the template, as it has the correct original dimensions and coordinates
+    # (and its coordinates have been converted to numeric types if needed).
+    probability_da = xr.full_like(ds_copy[bands[0]], np.nan, dtype=float)
     probability_da.name = f'probability_class_{target_class_id}'
 
-    # Fill the valid pixels with their predicted probabilities
-    probability_da.loc[valid_pixel_index] = target_class_probabilities_1d
+    # Combine the full NaN template with the unstacked probabilities.
+    # This will fill in the computed probabilities where they exist,
+    # and leave NaNs elsewhere (original no-data areas).
+    probability_da = probability_da.combine_first(unstacked_prob_da)
+    # --- END NEW FIX ---
 
     # 5. Scale to 0-100 if requested
     if scale_to_100:
@@ -443,6 +641,7 @@ def probability(
 
     # 6. Copy georeferencing attributes from a source band
     # This assumes the first band in `bands` list (`ds[bands[0]]`) has correct georeferencing
+    # Copy from the original `ds` to preserve any original attributes if `ds_copy` was simplified
     probability_da.attrs = ds[bands[0]].attrs
     # Ensure CRS is maintained if using rioxarray
     # if hasattr(ds[bands[0]], 'rio'):
@@ -451,3 +650,4 @@ def probability(
 
     print("Probability raster generation complete.")
     return probability_da
+
