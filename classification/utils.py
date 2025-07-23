@@ -535,7 +535,6 @@ def probability(
     print("Probability raster generation complete.")
     return probability_da
 
-
 def proba_binary(
     probability_da: xr.DataArray,
     threshold: float, # Threshold value (e.g., 80 for 80%)
@@ -610,5 +609,81 @@ def proba_binary(
             final_output.attrs['nodata'] = probability_da.attrs['nodata']
 
     return final_output
+# --- END: proba_binary --
+
+# def proba_binary(
+#     probability_da: xr.DataArray,
+#     threshold: float, # Threshold value (e.g., 80 for 80%)
+#     output_dtype: str = 'uint8',
+#     nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
+# ) -> xr.DataArray:
+#     """
+#     Converts a probability raster into a binary classification raster based on a threshold.
+
+#     - Pixels with probability >= threshold are set to 1.
+#     - Pixels with probability < threshold (but are valid data) are set to 0.
+#     - Pixels that were originally NoData (NaN) remain NoData (converted to `nodata_value`
+#       if `output_dtype` is an integer type).
+
+#     Parameters:
+#     - probability_da (xr.DataArray): Input DataArray with probability values (e.g., 0-100).
+#                                     Expected to have spatial dimensions (e.g., 'x', 'y').
+#     - threshold (float): The threshold value to apply. Pixels with probability >= threshold
+#                          will be classified as 1.
+#     - output_dtype (str): The desired output data type. Use 'float32' or 'float64'
+#                           to preserve NaN values. If an integer type (e.g., 'uint8', 'int16'),
+#                           original NaNs will be converted to `nodata_value`.
+#     - nodata_value (int): The value to use for NoData if output_dtype is an integer type.
+#                           Must be within the range of the chosen integer `output_dtype`.
+#                           Default is 255.
+
+#     Returns:
+#     - xr.DataArray: A new DataArray with binary classification (1 for above threshold,
+#                     0 for below threshold, and `nodata_value` for NoData areas).
+#     """
+
+#     print(f"Thresholding probability raster at {threshold}% to binary output.")
+
+#     # 1. Boolean mask for pixels above or equal to the threshold
+#     is_above_threshold = (probability_da >= threshold)
+
+#     # 2. Boolean mask for all non-NaN (valid) pixels
+#     is_valid_data = probability_da.notnull()
+
+#     # 3. Initialize the output array with NaN (for original NoData areas)
+#     #    We use float type for intermediate calculations to handle NaN.
+#     binary_output_float = xr.full_like(probability_da, np.nan, dtype=float)
+
+#     # 4. Set pixels above threshold to 1.0
+#     binary_output_float = xr.where(is_above_threshold, 1.0, binary_output_float)
+
+#     # 5. Set pixels below threshold (but valid data) to 0.0
+#     #    This applies where it's valid data AND below the threshold.
+#     binary_output_float = xr.where(is_valid_data & ~is_above_threshold, 0.0, binary_output_float)
+
+#     # 6. Handle final dtype conversion and NoData value
+#     if output_dtype in ['uint8', 'int8', 'int16', 'int32', 'int64']:
+#         # Check if the nodata_value is valid for the chosen dtype
+#         dtype_info = np.iinfo(output_dtype)
+#         if not (dtype_info.min <= nodata_value <= dtype_info.max):
+#             print(f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
+#                   f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
+#                   f"This might lead to unexpected results or data wrapping.")
+
+#         print(f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}.")
+#         # Replace NaNs with the specified nodata_value before casting to integer type
+#         final_output = binary_output_float.fillna(nodata_value).astype(output_dtype)
+#         # Add nodata attributes for GeoTIFF writing, crucial for GIS software
+#         final_output.attrs['_FillValue'] = nodata_value
+#         final_output.attrs['nodata'] = nodata_value # Common attribute for geospatial data
+#     else: # For float types, NaN is the natural nodata
+#         final_output = binary_output_float.astype(output_dtype)
+#         # Ensure _FillValue is set if there's an original nodata value in the input
+#         if '_FillValue' in probability_da.attrs:
+#             final_output.attrs['_FillValue'] = probability_da.attrs['_FillValue']
+#         elif 'nodata' in probability_da.attrs:
+#             final_output.attrs['nodata'] = probability_da.attrs['nodata']
+
+#     return final_output
 
 
