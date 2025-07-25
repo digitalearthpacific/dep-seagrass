@@ -1,4 +1,6 @@
 *.tif
 *.tiff
 *.pyc
+*.csv
+*.geojson
 .ipynb_checkpoints
