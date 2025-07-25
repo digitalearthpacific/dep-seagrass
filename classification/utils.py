@@ -537,7 +537,7 @@ def probability(
 
 def proba_binary(
     probability_da: xr.DataArray,
-    threshold: float, # Threshold value (e.g., 80 for 80%)
+    threshold: float, # Threshold value (e.g., 60 for 60%)
     output_dtype: str = 'uint8',
     nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
 ) -> xr.DataArray:
