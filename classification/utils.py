@@ -150,8 +150,7 @@ def mask_surf(
     threshold: float = 0.02,
     return_mask: bool = False,
 ) -> Dataset:
-
- """Masks out surf / white water pixels based on the nir
+    """Masks out surf / white water pixels based on the nir
     
     Args:
         ds (Dataset): Dataset to mask
@@ -165,6 +164,7 @@ def mask_surf(
     mask = ds.nir > threshold
     
     return apply_mask(ds, mask, ds_to_mask, return_mask)
+
 
 def mask_deeps(
     ds: Dataset,
