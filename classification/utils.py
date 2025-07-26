@@ -144,11 +144,32 @@ def mask_land(
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
     
+def mask_surf(
+    ds: Dataset,
+    ds_to_mask: Dataset | None = None,
+    threshold: float = 0.02,
+    return_mask: bool = False,
+) -> Dataset:
+
+ """Masks out surf / white water pixels based on the nir
+    
+    Args:
+        ds (Dataset): Dataset to mask
+        ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
+        threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.2.
+        return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
+    
+    Returns:
+        Dataset: Masked dataset
+    """
+    mask = ds.nir > threshold
+    
+    return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 def mask_deeps(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
-    threshold: float = -0.02,
+    threshold: float = -0.08,
     return_mask: bool = False,
 ) -> Dataset:
     """Masks out deep water pixels based on the natural log of the blue/green
@@ -201,9 +222,10 @@ def all_masks(
 ) -> Dataset:
     _, land_mask = mask_land(ds, return_mask = True)
     _, deeps_mask = mask_deeps(ds, return_mask = True)
+    _, surf_mask = mask_surf(ds, return_mask = True)
     _, elevation_mask = mask_elevation(ds, return_mask = True)
     
-    mask = land_mask & deeps_mask & elevation_mask
+    mask = land_mask & deeps_mask & surf_mask & elevation_mask
 
     return apply_mask(ds, mask, None, return_mask)
     
@@ -537,7 +559,7 @@ def probability(
 
 def proba_binary(
     probability_da: xr.DataArray,
-    threshold: float, # Threshold value (e.g., 60 for 60%)
+    threshold: float, # Threshold value (e.g., 60 for 80%)
     output_dtype: str = 'uint8',
     nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
 ) -> xr.DataArray:
