@@ -632,3 +632,154 @@ def proba_binary(
 
     return final_output
 
+# import geopandas as gpd
+import os
+import pandas as pd # Explicitly import pandas as it's used by geopandas.pd.concat
+
+
+def standardise(
+    input_folder_path: str,
+    output_folder_path: str,
+    file_extension: str = ".geojson",
+    target_crs: str = "EPSG:4326",
+    category_to_id_map: dict = None,
+    id_to_category_map: dict = None,
+    default_unmapped_id: int = 0,
+    output_file_format: str = "geojson", # New parameter for output format
+    **kwargs # Allows passing extra arguments to gpd.read_file and gpd.to_file
+) -> None:
+    """
+    Loads spatial files from an input folder, standardises their schema (observed, cc_id),
+    remaps categories (e.g., seaweed to algae), ensures each is in the target CRS,
+    and then saves each processed GeoDataFrame to an output folder.
+
+    Parameters:
+    - input_folder_path (str): The path to the folder containing the original spatial files.
+    - output_folder_path (str): The path to the folder where processed files will be saved.
+                                 This folder will be created if it doesn't exist.
+    - file_extension (str): The file extension to filter for when reading files
+                            (e.g., ".geojson", ".shp", ".csv").
+    - target_crs (str, optional): The CRS to ensure each individual GeoDataFrame is in.
+                                  Defaults to "EPSG:4326" (WGS84 Lat/Lon).
+                                  Set to None to skip any CRS handling.
+    - category_to_id_map (dict, optional): A dictionary mapping string category names to integer IDs.
+                                           Used to create/update 'cc_id'.
+    - id_to_category_map (dict, optional): A dictionary mapping integer IDs to string category names.
+                                           Used to create/update 'observed'.
+    - default_unmapped_id (int, optional): The integer ID to assign to 'cc_id' for 'observed'
+                                           categories not found in `category_to_id_map`. Defaults to 0.
+    - output_file_format (str, optional): The format to save the output files.
+                                          Common options: "geojson", "shp", "csv". Defaults to "geojson".
+    - **kwargs: Additional keyword arguments to pass to gpd.read_file() (for reading)
+                and gpd.to_file() (for writing).
+                For example, for reading CSVs: `sep=','`, `on_bad_lines='skip'`.
+                For writing GeoJSONs: `driver='GeoJSON'`.
+    """
+    print(f"Starting standardization and resaving process from '{input_folder_path}' to '{output_folder_path}'.")
+
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder_path, exist_ok=True)
+    print(f"Ensuring output directory exists: {output_folder_path}")
+
+    if target_crs:
+        print(f"All processed GeoDataFrames will be ensured to be in CRS: {target_crs}")
+
+    if not os.path.exists(input_folder_path):
+        print(f"Error: Input folder '{input_folder_path}' does not exist. Aborting.")
+        return
+
+    processed_count = 0
+    skipped_count = 0
+
+    # List all files in the input folder
+    for filename in os.listdir(input_folder_path):
+        file_path = os.path.join(input_folder_path, filename)
+        
+        if os.path.isfile(file_path) and filename.endswith(file_extension):
+            try:
+                gdf = gpd.read_file(file_path, **kwargs)
+                
+                print(f"\nProcessing: {filename}")
+
+                # --- Schema and Category Handling ---
+                
+                # 1. standardise category column name to 'observed'
+                found_category_col = None
+                for col in gdf.columns:
+                    if col.lower() in ['observed', 'category', 'class_name', 'classname', 'label']:
+                        found_category_col = col
+                        break
+                
+                if found_category_col and found_category_col != 'observed':
+                    gdf = gdf.rename(columns={found_category_col: 'observed'})
+                    print(f"  Renamed '{found_category_col}' to 'observed'.")
+                elif not found_category_col and 'cc_id' in gdf.columns and id_to_category_map:
+                    gdf['observed'] = gdf['cc_id'].map(id_to_category_map)
+                    print(f"  Created 'observed' from 'cc_id'.")
+                elif not found_category_col:
+                    print(f"  Warning: No 'observed' or similar category column found. "
+                          "Attempting to proceed, but 'observed' column might be missing or incorrect.")
+
+                # 2. Rename 'seaweed' to 'algae' in the 'observed' column
+                if 'observed' in gdf.columns:
+                    gdf['observed'] = gdf['observed'].astype(str)
+                    original_seaweed_count = (gdf['observed'] == 'seaweed').sum()
+                    if original_seaweed_count > 0:
+                        gdf['observed'] = gdf['observed'].replace('seaweed', 'algae')
+                        print(f"  Renamed 'seaweed' to 'algae' ({original_seaweed_count} instances).")
+                
+                # 3. Ensure 'cc_id' column based on 'observed' and canonical mapping
+                if 'observed' in gdf.columns and category_to_id_map:
+                    gdf['cc_id'] = gdf['observed'].map(category_to_id_map).fillna(default_unmapped_id).astype(int)
+                    print(f"  Ensured 'cc_id' column.")
+                elif 'cc_id' not in gdf.columns:
+                    print(f"  Warning: No 'cc_id' column could be created or found.")
+
+                # --- Robust CRS Handling ---
+                if target_crs:
+                    if gdf.crs is None:
+                        print(f"  Warning: File has no CRS. Assuming it's in {target_crs} and setting CRS.")
+                        gdf = gdf.set_crs(target_crs, allow_override=True)
+                    
+                    if gdf.crs is not None and gdf.crs != target_crs:
+                        print(f"  Reprojecting from {gdf.crs} to {target_crs}...")
+                        gdf = gdf.to_crs(target_crs)
+                    elif gdf.crs == target_crs:
+                        print(f"  File is already in target CRS: {target_crs}.")
+                else:
+                    print(f"  No target_crs specified. Keeping original CRS: {gdf.crs}")
+                
+                # --- Save the processed GeoDataFrame ---
+                # Construct output filename, preserving original name but changing extension if needed
+                name_without_ext = os.path.splitext(filename)[0]
+                output_filename = f"{name_without_ext}.{output_file_format}"
+                output_file_path = os.path.join(output_folder_path, output_filename)
+
+                # Remove kwargs that are only for reading, if any, before passing to to_file
+                write_kwargs = {k: v for k, v in kwargs.items() if k not in ['sep', 'on_bad_lines', 'encoding']}
+                
+                # Specify driver for writing, especially for geojson/shapefile
+                driver_map = {
+                    "geojson": "GeoJSON",
+                    "shp": "ESRI Shapefile",
+                    "csv": "CSV" # GeoPandas can write CSV, but geometry will be lost unless specified
+                }
+                driver = driver_map.get(output_file_format.lower(), None)
+                if driver:
+                    write_kwargs['driver'] = driver
+
+                gdf.to_file(output_file_path, **write_kwargs)
+                print(f"  Saved processed file to: {output_file_path}")
+                processed_count += 1
+
+            except Exception as e:
+                print(f"  Error processing {filename}: {e}")
+                print(f"  Skipping {filename}.")
+                skipped_count += 1
+        elif os.path.isdir(file_path):
+            print(f"  Skipping directory: {filename}")
+        else:
+            print(f"  Skipping non-{file_extension} file: {filename}")
+    
+    print(f"\nStandardization and resaving complete. Processed {processed_count} files, skipped {skipped_count} files.")
+
