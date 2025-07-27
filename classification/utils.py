@@ -226,7 +226,7 @@ def all_masks(
     _, elevation_mask = mask_elevation(ds, return_mask = True)
     
     mask = land_mask & deeps_mask & surf_mask & elevation_mask
-
+    
     return apply_mask(ds, mask, None, return_mask)
     
 
