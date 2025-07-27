@@ -147,7 +147,7 @@ def mask_land(
 def mask_surf(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
-    threshold: float = 0.02,
+    threshold: float = 0.001,
     return_mask: bool = False,
 ) -> Dataset:
     """Masks out surf / white water pixels based on the nir
