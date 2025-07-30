@@ -1,0 +1,16 @@
+dask[complete]
+GDAL==3.10.0
+geopandas
+joblib
+numpy
+odc-stac
+pandas
+planetary-computer
+pystac
+pystac_client
+pyproj
+rasterio
+scikit-image
+shapely
+rioxarray
+xarray
