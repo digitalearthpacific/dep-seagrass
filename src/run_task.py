@@ -23,7 +23,7 @@ def main(
     datetime: Annotated[str, typer.Option()],
     version: Annotated[str, typer.Option()],
     output_bucket: str = None,
-    base_product: str = "ls",
+    base_product: str = "s2",
     memory_limit: str = "50GB",
     n_workers: int = 2,
     threads_per_worker: int = 32,
@@ -31,7 +31,7 @@ def main(
     decimated: bool = False,
     overwrite: Annotated[bool, typer.Option()] = False,
 ) -> None:
-    log = get_logger(tile_id)
+    log = get_logger(tile_id, "seagrass")
     log.info("Starting processing.")
 
     tile_index = tuple(int(i) for i in tile_id.split(","))
@@ -98,7 +98,7 @@ def main(
         fail_on_error=False,
     )
 
-    model = joblib.load("models/nm-27072025-test.model")
+    model = joblib.load("classification/models/nm-27072025-test.model")
     processor = SeagrassProcessor(model=model)
 
     stac_creator = StacCreator(
@@ -117,9 +117,9 @@ def main(
             }
         ):
             with Client(
-                n_workers=n_workers,
-                threads_per_worker=threads_per_worker,
-                memory_limit=memory_limit,
+                #                n_workers=n_workers,
+                #                threads_per_worker=threads_per_worker,
+                #                memory_limit=memory_limit,
             ):
                 log.info(
                     (
