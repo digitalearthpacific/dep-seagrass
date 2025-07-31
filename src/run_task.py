@@ -11,24 +11,11 @@ from dep_tools.searchers import PystacSearcher
 from dep_tools.stac_utils import StacCreator
 from dep_tools.task import AwsStacTask as Task
 from dep_tools.utils import get_logger
+import joblib
 from odc.stac import configure_s3_access
 from typing_extensions import Annotated
 
-S2_BANDS = [
-    "scl",
-    "coastal",
-    "blue",
-    "green",
-    "red",
-    "rededge1",
-    "rededge2",
-    "rededge3",
-    "nir",
-    "nir08",
-    "nir09",
-    "swir16",
-    "swir22",
-]
+from processor import SeagrassProcessor
 
 
 def main(
@@ -81,7 +68,6 @@ def main(
         catalog="https://stac.digitalearthpacific.org",
         collections=["dep_s2_geomad"],
         datetime=datetime,
-        **search_kwargs,
     )
 
     # Not sure these need to be listed because I think it's everything
@@ -112,9 +98,9 @@ def main(
         fail_on_error=False,
     )
 
-    processor = Processor()
+    model = joblib.load("models/nm-27072025-test.model")
+    processor = SeagrassProcessor(model=model)
 
-    # STAC making thing
     stac_creator = StacCreator(
         itempath=itempath, remote=True, make_hrefs_https=True, with_raster=True
     )
