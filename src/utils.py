@@ -56,6 +56,7 @@ def texture(data: xr.DataArray, window_size=9, levels=32) -> xr.Dataset:
     # Scale to 0-LEVELS for GLCM
     img = (
         ((data - min) / (max - min) * (levels - 1)).clip(0, levels - 1)
+        # removing this cast and keeping float for now (glcm_features will cast)
         #   .values.astype(np.uint8)
     )
 
@@ -109,8 +110,8 @@ def texture(data: xr.DataArray, window_size=9, levels=32) -> xr.Dataset:
     return result.to_dataset(dim="feature")
 
 
-def glcm_features(patch: np.ndarray, levels: int):
-    # If there is no data, return nan
+def glcm_features(patch: np.ndarray, levels: int) -> np.ndarray:
+    # If there is no data, return nan for all vars
     if np.isnan(patch).all():
         return np.full(7, float("nan"))
 
@@ -280,6 +281,7 @@ def probability(
         stack_dims.insert(0, "time")  # Add time as the first dimension to stack
 
     features_stacked = features_ds.stack(pixel=stack_dims)
+    features_stacked = features_stacked.where(~np.isinf(features_stacked))
 
     # 2. Convert to a Pandas DataFrame
     features_df = features_stacked.to_dataframe()

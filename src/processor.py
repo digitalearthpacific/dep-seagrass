@@ -37,7 +37,7 @@ class SeagrassProcessor(Processor):
         seagrass_probability = probability(
             ds=combined_data,
             model=self._model,
-            # or have the long list, danger here is they're out of order
+            # or have the long list, danger here is they're possibly out of order
             bands=list(combined_data.keys()),
             target_class_id=seagrass_code,
             # I _think_ this is the correct usage
