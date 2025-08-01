@@ -114,7 +114,7 @@ frozenlist==1.7.0
     #   aiosignal
 fsspec==2025.7.0
     # via dask
-gdal==3.10
+gdal==3.8.4
     # via
     #   -r requirements.in
     #   dep-tools
@@ -334,6 +334,7 @@ referencing==0.36.2
     #   jsonschema-specifications
 requests==2.32.4
     # via
+    #   -r requirements.in
     #   azure-core
     #   planetary-computer
     #   pystac-client
@@ -359,7 +360,7 @@ scikit-image==0.25.2
     # via
     #   -r requirements.in
     #   odc-algo
-scikit-learn==1.7.1
+scikit-learn==1.7.0
     # via -r requirements.in
 scipy==1.16.1
     # via

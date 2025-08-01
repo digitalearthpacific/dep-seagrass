@@ -18,7 +18,6 @@ def main(
     years: Annotated[str, typer.Option(parser=datetime_parser)],
     version: Annotated[str, typer.Option()],
     limit: Optional[str] = None,
-    base_product: str = "s2",
     output_bucket: Optional[str] = None,
     output_prefix: Optional[str] = None,
     overwrite: Annotated[bool, typer.Option()] = False,
@@ -45,7 +44,7 @@ def main(
         for task in tasks:
             itempath = S3ItemPath(
                 bucket=output_bucket,
-                sensor=base_product,
+                sensor="s2",
                 dataset_id=DATASET_ID,
                 version=version,
                 time=task["year"],

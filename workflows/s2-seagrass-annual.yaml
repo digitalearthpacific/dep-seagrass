@@ -1,0 +1,123 @@
+kind: Workflow
+metadata:
+  generateName: seagrass-
+  namespace: argo
+spec:
+  entrypoint: workflow-entrypoint
+  serviceAccountName: public-bucket-writer
+  podGC:
+    strategy: OnWorkflowSuccess
+    deleteDelayDuration: 600s
+  parallelism: 50
+  podMetadata:
+    labels:
+      app: s2-seagrass
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+  arguments:
+    parameters:
+      - name: version
+        value: "0.0.1" # The version of the data product being made
+      - name: image-name
+        value: "dep-seagrass" # The Docker image
+      - name: base-product
+        value: "s2"
+      - name: image-tag
+        value: "9ab1eec" # The Docker image and code version
+      - name: bucket
+        value: "dep-public-staging" # The bucket to store the data
+      - name: overwrite
+        value: "--no-overwrite" # Can be "--overwrite" or "--no-overwrite"
+  templates:
+    - name: workflow-entrypoint
+      dag:
+        tasks:
+          - name: generate-ids
+            template: generate
+            arguments:
+              parameters:
+                - name: limit
+                  value: "999"
+                - name: years
+                  value: "2024" # One year "2022", or a period "2020-2021"
+                - name: version
+                  value: "{{ workflow.parameters.version }}"
+                - name: bucket
+                  value: "{{ workflow.parameters.bucket }}"
+                - name: overwrite
+                  value: "{{ workflow.parameters.overwrite }}"
+          - name: process-id
+            depends: generate-ids.Succeeded
+            template: process
+            arguments:
+              parameters:
+                - name: tile-id
+                  value: "{{item.tile-id}}"
+                - name: year
+                  value: "{{item.year}}"
+                - name: version
+                  value: "{{ workflow.parameters.version }}"
+                - name: bucket
+                  value: "{{ workflow.parameters.bucket }}"
+                - name: overwrite
+                  value: "{{ workflow.parameters.overwrite }}"
+            withParam: "{{ tasks.generate-ids.outputs.result }}"
+
+    - name: generate
+      inputs:
+        parameters:
+          - name: limit
+          - name: years
+          - name: version
+          - name: bucket
+          - name: overwrite
+      container:
+        image: "ghcr.io/digitalearthpacific/{{ workflow.parameters.image-name }}:{{ workflow.parameters.image-tag }}"
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 1.0
+        command: [python]
+        args:
+          - src/print_tasks.py
+          - --years
+          - "{{ inputs.parameters.years }}"
+          - --version
+          - "{{ inputs.parameters.version }}"
+          - --limit
+          - "{{ inputs.parameters.limit }}"
+          - --output-bucket
+          - "{{ inputs.parameters.bucket }}"
+          - "{{ inputs.parameters.overwrite }}"
+
+    - name: process
+      inputs:
+        parameters:
+          - name: tile-id
+          - name: year
+          - name: version
+          - name: bucket
+          - name: overwrite
+      container:
+        image: "ghcr.io/digitalearthpacific/{{ workflow.parameters.image-name }}:{{ workflow.parameters.image-tag }}"
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 8
+            memory: 64Gi
+          limits:
+            cpu: 8
+            memory: 64Gi
+        command: [python]
+        args:
+          - src/run_task.py
+          - --tile-id
+          - "{{ inputs.parameters.tile-id }}"
+          - --datetime
+          - "{{ inputs.parameters.year }}"
+          - --version
+          - "{{ inputs.parameters.version }}"
+          - --output-bucket
+          - "{{ inputs.parameters.bucket }}"
+          - "{{ inputs.parameters.overwrite }}"
