@@ -29,11 +29,11 @@ def main(
 
     tasks = [
         {
-            "tile-id": ",".join([str(i) for i in tile[0]]),
+            "tile-id": tile,
             "year": year,
             "version": version,
         }
-        for tile, year in product(list(tiles), years)
+        for tile, year in product(tiles, years)
     ]
 
     # If we don't want to overwrite, then we should only run tasks that don't already exist
