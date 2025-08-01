@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
 
 ADD requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache --break-system-packages -r /tmp/requirements.txt
+RUN pip3 install --no-cache -r /tmp/requirements.txt
 
 ADD . /code
 
