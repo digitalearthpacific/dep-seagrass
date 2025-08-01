@@ -2,6 +2,7 @@ from odc.stac import load
 from pystac_client import Client
 from xarray import DataArray, Dataset
 
+
 def apply_mask(
     ds: Dataset,
     mask: DataArray,
