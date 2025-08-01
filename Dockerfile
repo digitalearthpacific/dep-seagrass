@@ -1,4 +1,4 @@
-FROM ghcr.io/osgeo/gdal:ubuntu-full-3.8.4
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.10.0
 
 # Don't use old pygeos
 ENV USE_PYGEOS=0
@@ -14,9 +14,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get autoremove \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
 
-RUN pip3 install --upgrade pip setuptools wheel build
 ADD requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache -r /tmp/requirements.txt
+RUN pip3 install --no-cache --break-system-packages -r /tmp/requirements.txt
 
 ADD . /code
 
