@@ -24,11 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
-#      - name: Check formatting
-#        uses: rickstaa/action-black@v1
-#        id: action_black
-#        with:
-#          black_args: "--check src"
+      - name: Check formatting
+        uses: rickstaa/action-black@v1
+        id: action_black
+        with:
+          black_args: "src/"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -73,7 +73,7 @@ jobs:
         id: get_version
         run: |
           git fetch --all --tags
-          echo "VERSION=$(git describe --tags)" >> $GITHUB_OUTPUT
+          echo "VERSION=$(git describe --tags --always)" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v4
