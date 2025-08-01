@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - run_task
   release:
     types:
       - created
