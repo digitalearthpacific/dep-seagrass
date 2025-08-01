@@ -1,5 +1,7 @@
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+import pandas as pd
+from skimage.feature import graycomatrix, graycoprops
 import xarray as xr
 
 
@@ -14,51 +16,84 @@ def scale(data):
     xr.Dataset: The scaled dataset with values clipped between 0 and 1.
     """
     scaled = (data * 0.0001).clip(0, 1)
-    return scaled
+    return scaled.astype("float32")
+
+
+def calculate_band_indices(data):
+    """
+    Calculate various band indices and add them to the dataset.
+
+    Parameters:
+    data (xarray.Dataset): The input dataset containing the necessary spectral bands.
+
+    Returns:
+    xarray.Dataset: The dataset with added band indices.
+    """
+
+    data["mndwi"] = (data["green"] - data["swir16"]) / (data["green"] + data["swir16"])
+    data["ndti"] = (data["red"] - data["green"]) / (data["red"] + data["green"])
+    data["cai"] = (data["coastal"] - data["blue"]) / (data["coastal"] + data["blue"])
+    data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
+    data["evi"] = (2.5 * data["nir"] - data["red"]) / (
+        data["nir"] + (6 * data["red"]) - (7.5 * data["blue"]) + 1
+    )
+    data["savi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
+    data["ndwi"] = (data["green"] - data["nir"]) / (data["green"] + data["nir"])
+    data["b_g"] = data["blue"] / data["green"]
+    data["b_r"] = data["blue"] / data["red"]
+    data["mci"] = data["nir"] / data["rededge1"]
+    data["ndci"] = (data["rededge1"] - data["red"]) / (data["rededge1"] + data["red"])
+    data["ln_bg"] = np.log(data.blue / data.green)
+
+    return data.astype("float32")
 
 
 def texture(data: xr.DataArray, window_size=9, levels=32) -> xr.Dataset:
-    # Input
+    # There are min & max values in the stac items which
+    # could be used here to save a bit of time if needed
     max = data.max().values
     min = data.min().values
     # Scale to 0-LEVELS for GLCM
     img = (
-        ((data - min) / (max - min) * (levels - 1))
-        .clip(0, levels - 1)
-        .values.astype(np.uint8)
+        ((data - min) / (max - min) * (levels - 1)).clip(0, levels - 1)
+        #   .values.astype(np.uint8)
     )
 
     # Extract overlapping windows
-    patches = sliding_window_view(img, (window_size, window_size))
-    # Shape: (rows, cols, win_y, win_x)
+    # patches = sliding_window_view(img, (window_size, window_size))
 
-    # Assuming 'patches' is a 4D NumPy array with dimensions (y_coords, x_coords, window_y_size, window_x_size)
-    # To get the first patch (at y=0, x=0), you would index it like this:
-    sample_patch_data = patches[0, 0, :, :]
+    #    patches_xarr = (
+    #        xr.DataArray(patches, dims=["y", "x", "win_y", "win_x"])
+    #        # Without chunk, doesn't appear to parallelize
+    #        .chunk(dict(x=1024, y=1024))
+    #    )
+    # I believe this is equivalent to the above
+    # not sure if the center arg should be True or False!
+    # I also wonder if setting the min_periods arg make the nan checking in
+    # glcm_features unnecessary
+    patches_xarr = img.rolling(x=window_size, y=window_size, center=False).construct(
+        y="win_y", x="win_x"
+    )
 
-    # Verify the shape of the extracted sample patch data
-    print(f"Shape of sample_patch_data: {sample_patch_data.shape}")
-
-    # Call glcm_features directly on this 2D sample data
-    sample_result = glcm_features(sample_patch_data)
-
-    # Use apply_ufunc to vectorize over (row, col) dimensions
     result = xr.apply_ufunc(
         glcm_features,
-        xr.DataArray(patches, dims=["y", "x", "win_y", "win_x"]),
+        patches_xarr,
         input_core_dims=[["win_y", "win_x"]],
         output_core_dims=[["feature"]],
         vectorize=True,
         dask="parallelized",
         output_dtypes=[np.float32],
+        output_sizes=dict(feature=7),
+        kwargs={"levels": levels},
     )
 
     # Add coordinates & names
-    pad = window_size - 1
+    # JA: removed padding because it doesn't seem to be needed with rolling/construct
+    # pad = window_size - 1
     result = result.assign_coords(
         {
-            "y": data.y[:-pad],
-            "x": data.x[:-pad],
+            "y": data.y,  # [:-pad],
+            "x": data.x,  # [:-pad],
             "feature": [
                 "contrast",
                 "homogeneity",
@@ -74,13 +109,83 @@ def texture(data: xr.DataArray, window_size=9, levels=32) -> xr.Dataset:
     return result.to_dataset(dim="feature")
 
 
+def glcm_features(patch: np.ndarray, levels: int):
+    # If there is no data, return nan
+    if np.isnan(patch).all():
+        return np.full(7, float("nan"))
+
+    # careful here as it casts any nans to 0 (not sure what is desired!)
+    patch = np.array(patch, copy=True).astype("uint8")
+    glcm = graycomatrix(
+        patch, distances=[1], angles=[0], levels=levels, symmetric=True, normed=True
+    )
+    out = np.empty(7, dtype=np.float32)
+    out[0] = graycoprops(glcm, "contrast")[0, 0]
+    out[1] = graycoprops(glcm, "homogeneity")[0, 0]
+    out[2] = graycoprops(glcm, "energy")[0, 0]
+    out[3] = graycoprops(glcm, "ASM")[0, 0]
+    out[4] = graycoprops(glcm, "correlation")[0, 0]
+    out[5] = graycoprops(glcm, "mean")[0, 0]
+
+    # glcm_p = glcm[:, :, 0, 0]
+    # entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+
+    glcm_p = glcm[:, :, 0, 0]
+    out[6] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+    return out
+
+
+def do_prediction(ds, model, output_name: str | None = None):
+    """Predicts the model on the dataset and adds the prediction as a new variable.
+
+    Args:
+        ds (Dataset): Dataset to predict on
+        model (RegressorMixin): Model to predict with
+        output_name (str | None): Name of the output variable. Defaults to None.
+
+    Returns:
+        Dataset: Dataset with the prediction as a new variable
+    """
+    # JA: Never used
+    # mask = ds.red.isnull()  # Probably should check more bands
+
+    # Convert to a stacked array of observations
+    stacked_arrays = ds.to_array().stack(dims=["y", "x"])
+
+    # Replace any infinities with NaN
+    stacked_arrays = stacked_arrays.where(stacked_arrays != float("inf"))
+    stacked_arrays = stacked_arrays.where(stacked_arrays != float("-inf"))
+
+    # Replace any NaN values with 0
+    # TODO: Make sure that each column is labelled with the correct band name
+    stacked_arrays = stacked_arrays.squeeze().fillna(0).transpose()
+
+    # Predict the classes
+    predicted = model.predict(stacked_arrays)
+
+    # Reshape back to the original 2D array
+    array = predicted.reshape(ds.y.size, ds.x.size)
+
+    # Convert to an xarray again, because it's easier to work with
+    predicted_da = xr.DataArray(array, coords={"y": ds.y, "x": ds.x}, dims=["y", "x"])
+
+    # Mask the prediction with the original mask
+    # predicted_da = predicted_da.where(~mask).compute()
+
+    # If we have a name, return dataset, else the dataarray
+    if output_name is None:
+        return predicted_da
+    else:
+        return predicted_da.to_dataset(name=output_name)
+
+
 def probability(
     ds: xr.Dataset,
-    model,  # Your trained scikit-learn model (e.g., RandomForestClassifier)
-    bands: list[str],  # List of band names to use as features
-    target_class_id: int,  # The class ID for which to return probabilities
-    no_data_value: int = -9999,  # Value used for no-data in your input data (if applicable)
-    scale_to_100: bool = True,  # Whether to scale probabilities from 0-1 to 0-100
+    model,
+    bands: list[str],
+    target_class_id: int,
+    no_data_value: int = -9999,
+    scale_to_100: bool = True,
 ) -> xr.DataArray:
     """
     Generates a probability raster for a specific target class from a trained

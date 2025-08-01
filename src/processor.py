@@ -2,7 +2,14 @@ from dep_tools.processors import Processor
 import xarray as xr
 
 from masking import all_masks
-from utils import scale, probability, proba_binary, texture
+from utils import (
+    calculate_band_indices,
+    scale,
+    do_prediction,
+    probability,
+    proba_binary,
+    texture,
+)
 
 
 class SeagrassProcessor(Processor):
@@ -11,57 +18,28 @@ class SeagrassProcessor(Processor):
         self._model = model
         self._probability_threshold = probability_threshold
 
-    def process(self, data: xr.Dataset) -> xr.Dataset:
-        scaled_data = scale(data).squeeze(drop=True)
-        texture_data = texture(data.blue)
-        breakpoint() # <- haven't got here yet
-        combined_ds = xr.merge([scaled_data, texture_data])
-        masked_scaled, mask = all_masks(combined_ds, return_mask=True)
-        # notebook 4 gets confusing here. I'm not sure what is desired
-        # I think it's this?
-        seagrass_value = 4  # ???????
-        probability_output = probability(
-            masked_scaled,
-            self._model,
-            [
-                "nir",
-                "red",
-                "blue",
-                "green",
-                "emad",
-                "smad",
-                "bcmad",
-                "nir08",
-                "nir09",
-                "swir16",
-                "swir22",
-                "coastal",
-                "rededge1",
-                "rededge2",
-                "rededge3",
-                "mndwi",
-                "ndti",
-                "cai",
-                "ndvi",
-                "evi",
-                "savi",
-                "ndwi",
-                "b_g",
-                "b_r",
-                "mci",
-                "ndci",
-                "ln_bg",
-                "contrast",
-                "homogeneity",
-                "energy",
-                "ASM",
-                "correlation",
-                "mean",
-                "entropy",
-            ],
-            seagrass_value,
+    def process(self, input_data: xr.Dataset) -> xr.Dataset:
+        scaled_data = scale(input_data).squeeze(drop=True)
+        scaled_data = calculate_band_indices(scaled_data)
+        masked_scaled, _ = all_masks(scaled_data, return_mask=True)
+        texture_data = texture(masked_scaled.blue)
+        # Getting dask errors without this compute, not sure why
+        # But it probably makes sense, if we're not getting memory errors,
+        # since do_prediction and probability probably each load into memory
+        combined_data = xr.merge([masked_scaled, texture_data]).compute()
+        classification = do_prediction(combined_data, self._model)
+        seagrass_code = 4
+        seagrass_probability = probability(
+            ds=combined_data,
+            model=self._model,
+            bands=list(combined_data.keys()),
+            target_class_id=seagrass_code,
         )
-        seagrass_extent = proba_binary(probability_output, 60)
+        seagrass_extent = proba_binary(seagrass_probability, 60)
         return xr.Dataset(
-            {"seagrass": seagrass_extent, "seagrass_probability": probability_output}
+            {
+                "classification": classification,
+                "seagrass": seagrass_extent,
+                "seagrass_probability": seagrass_probability,
+            }
         )

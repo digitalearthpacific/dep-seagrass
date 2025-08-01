@@ -11,7 +11,9 @@ pystac
 pystac_client
 pyproj
 rasterio
+requests
 scikit-image
+scikit-learn==1.7.0 # To match model file version
 shapely
 rioxarray
 typer

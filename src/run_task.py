@@ -27,7 +27,7 @@ def main(
     memory_limit: str = "50GB",
     n_workers: int = 2,
     threads_per_worker: int = 32,
-    xy_chunk_size: int = 3201,
+    xy_chunk_size: int = 1024,
     decimated: bool = False,
     overwrite: Annotated[bool, typer.Option()] = False,
 ) -> None:
@@ -109,11 +109,12 @@ def main(
         # TODO: Shift dask config out to environment variables...
         with dask.config.set(
             {
-                "dataframe.shuffle.method": "p2p",
-                "distributed.worker.memory.target": False,
-                "distributed.worker.memory.spill": False,
-                "distributed.worker.memory.pause": 0.9,
-                "distributed.worker.memory.terminate": 0.98,
+                #                "dataframe.shuffle.method": "p2p",
+                #                "distributed.worker.memory.target": False,
+                #                "distributed.worker.memory.spill": False,
+                #                "distributed.worker.memory.pause": 0.9,
+                #                "distributed.worker.memory.terminate": 0.98,
+                "array.rechunk.method": "tasks"
             }
         ):
             with Client(

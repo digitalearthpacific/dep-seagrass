@@ -4,31 +4,26 @@ from itertools import product
 from typing import Annotated, Optional
 
 import boto3
+import requests
 import typer
 from dep_tools.aws import object_exists
-from dep_tools.grids import get_tiles
 from dep_tools.namers import S3ItemPath
 from dep_tools.parsers import datetime_parser
 
 DATASET_ID = "seagrass"
+TILES_LIST = "https://dep-public-staging.s3.us-west-2.amazonaws.com/dep_ls_coastlines/raw/non_hawaii_tiles.txt"
 
 
 def main(
     years: Annotated[str, typer.Option(parser=datetime_parser)],
     version: Annotated[str, typer.Option()],
-    regions: Optional[str] = "ALL",
-    tile_buffer_kms: Optional[int] = 0.0,
     limit: Optional[str] = None,
     base_product: str = "s2",
     output_bucket: Optional[str] = None,
     output_prefix: Optional[str] = None,
     overwrite: Annotated[bool, typer.Option()] = False,
 ) -> None:
-    country_codes = None if regions.upper() == "ALL" else regions.split(",")
-
-    tiles = get_tiles(
-        country_codes=country_codes, buffer_distance=tile_buffer_kms * 1000
-    )
+    tiles = requests.get(TILES_LIST).text.splitlines()
 
     if limit is not None:
         limit = int(limit)
