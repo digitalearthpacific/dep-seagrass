@@ -8,7 +8,7 @@ spec:
   podGC:
     strategy: OnWorkflowSuccess
     deleteDelayDuration: 600s
-  parallelism: 50
+  parallelism: 250
   podMetadata:
     labels:
       app: s2-seagrass
@@ -23,7 +23,7 @@ spec:
       - name: base-product
         value: "s2"
       - name: image-tag
-        value: "9ab1eec" # The Docker image and code version
+        value: "b157136"
       - name: bucket
         value: "dep-public-staging" # The bucket to store the data
       - name: overwrite
@@ -121,3 +121,6 @@ spec:
           - --output-bucket
           - "{{ inputs.parameters.bucket }}"
           - "{{ inputs.parameters.overwrite }}"
+      env:
+        - name: DASK_ARRAY__RECHUNK__METHOD
+          value: "tasks"
