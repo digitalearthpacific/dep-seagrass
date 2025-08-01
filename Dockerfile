@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get autoremove \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
 
+RUN pip3 install --upgrade pip setuptools wheel build
 ADD requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache -r /tmp/requirements.txt
 
