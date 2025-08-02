@@ -8,12 +8,14 @@ spec:
   podGC:
     strategy: OnWorkflowSuccess
     deleteDelayDuration: 600s
-  parallelism: 250
+  parallelism: 50
   podMetadata:
     labels:
       app: s2-seagrass
     annotations:
       karpenter.sh/do-not-disrupt: "true"
+  nodeSelector:
+      karpenter.sh/capacity-type: "spot"
   arguments:
     parameters:
       - name: version
