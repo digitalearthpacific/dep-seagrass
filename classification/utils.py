@@ -1,4 +1,3 @@
-
 from odc.stac import load  # Correct source for `load`
 import xarray as xr
 from xarray import DataArray, Dataset
@@ -10,7 +9,7 @@ from skimage.util import view_as_windows
 from shapely import box
 from datetime import datetime
 from shapely.geometry import Polygon
-from pyproj import CRS 
+from pyproj import CRS
 import folium
 import geopandas as gpd
 import pandas as pd
@@ -23,6 +22,7 @@ import planetary_computer
 from odc.stac import load
 from pystac.client import Client
 from skimage.feature import graycomatrix, graycoprops
+
 
 def load_data(items, bands, bbox):
     """
@@ -79,7 +79,9 @@ def calculate_band_indices(data):
     data["cai"] = (data["coastal"] - data["blue"]) / (data["coastal"] + data["blue"])
     data["ndvi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
     data["nir"] + (6 * data["red"]) - (7.5 * data["blue"] + 1)
-    data["evi"] = (2.5 * data["nir"] - data["red"]) / (data["nir"] + (6 * data["red"]) - (7.5 * data["blue"]) + 1)
+    data["evi"] = (2.5 * data["nir"] - data["red"]) / (
+        data["nir"] + (6 * data["red"]) - (7.5 * data["blue"]) + 1
+    )
     data["savi"] = (data["nir"] - data["red"]) / (data["nir"] + data["red"])
     data["ndwi"] = (data["green"] - data["nir"]) / (data["green"] + data["nir"])
     data["b_g"] = data["blue"] / data["green"]
@@ -121,7 +123,6 @@ def apply_mask(
         return masked
 
 
-
 def mask_land(
     ds: Dataset, ds_to_mask: Dataset | None = None, return_mask: bool = False
 ) -> Dataset:
@@ -143,7 +144,8 @@ def mask_land(
     mask = ~mask
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
-    
+
+
 def mask_surf(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
@@ -151,18 +153,18 @@ def mask_surf(
     return_mask: bool = False,
 ) -> Dataset:
     """Masks out surf / white water pixels based on the nir
-    
+
     Args:
         ds (Dataset): Dataset to mask
         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
         threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.2.
         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
-    
+
     Returns:
         Dataset: Masked dataset
     """
     mask = ds.nir > threshold
-    
+
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 
@@ -188,6 +190,7 @@ def mask_deeps(
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
+
 def mask_elevation(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
@@ -198,37 +201,33 @@ def mask_elevation(
     e84_catalog = "https://earth-search.aws.element84.com/v1/"
     e84_client = Client.open(e84_catalog)
     collection = "cop-dem-glo-30"
-    
+
     items = e84_client.search(
-        collections=[collection],
-        bbox=list(ds.odc.geobox.geographic_extent.boundingbox)
+        collections=[collection], bbox=list(ds.odc.geobox.geographic_extent.boundingbox)
     ).item_collection()
-    
+
     # Using geobox means it will load the elevation data the same shape as the other data
     elevation = load(items, measurements=["data"], geobox=ds.odc.geobox).squeeze()
 
-
-    
     # True where data is above 10m elevation
     mask = elevation.data < threshold
-    
-    return apply_mask(ds, mask, ds_to_mask, return_mask)
 
+    return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 
 def all_masks(
     ds: Dataset,
     return_mask: bool = False,
 ) -> Dataset:
-    _, land_mask = mask_land(ds, return_mask = True)
-    _, deeps_mask = mask_deeps(ds, return_mask = True)
-    _, surf_mask = mask_surf(ds, return_mask = True)
-    _, elevation_mask = mask_elevation(ds, return_mask = True)
-    
+    _, land_mask = mask_land(ds, return_mask=True)
+    _, deeps_mask = mask_deeps(ds, return_mask=True)
+    _, surf_mask = mask_surf(ds, return_mask=True)
+    _, elevation_mask = mask_elevation(ds, return_mask=True)
+
     mask = land_mask & deeps_mask & surf_mask & elevation_mask
-    
+
     return apply_mask(ds, mask, None, return_mask)
-    
+
 
 def do_prediction(ds, model, output_name: str | None = None):
     """Predicts the model on the dataset and adds the prediction as a new variable.
@@ -273,21 +272,14 @@ def do_prediction(ds, model, output_name: str | None = None):
         return predicted_da.to_dataset(name=output_name)
 
 
-
-
-
 WINDOW_SIZE = 9
 LEVELS = 32
+
 
 # Your patch function
 def glcm_features(patch):
     glcm = graycomatrix(
-        patch,
-        distances=[1],
-        angles=[0],
-        levels=LEVELS,
-        symmetric=True,
-        normed=True
+        patch, distances=[1], angles=[0], levels=LEVELS, symmetric=True, normed=True
     )
     out = np.empty(7, dtype=np.float32)
     out[0] = graycoprops(glcm, "contrast")[0, 0]
@@ -297,27 +289,24 @@ def glcm_features(patch):
     out[4] = graycoprops(glcm, "correlation")[0, 0]
     out[5] = graycoprops(glcm, "mean")[0, 0]
 
-            
-            # glcm_p = glcm[:, :, 0, 0]
-            # entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
-    
+    # glcm_p = glcm[:, :, 0, 0]
+    # entropy[i, j] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
+
     glcm_p = glcm[:, :, 0, 0]
     out[6] = -np.sum(glcm_p * np.log2(glcm_p + 1e-10))
     return out
 
 
-
 def output(
     classification_da: xr.DataArray,
     target_class_id: int,
-    output_dtype: str = 'float32',
-    nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
+    output_dtype: str = "float32",
+    nodata_value: int = 255,  # Value to use for NoData if output_dtype is an integer type
 ) -> xr.DataArray:
-    """
-"""
+    """ """
 
     # 1. Boolean mask for the target class
-    target_class = (classification_da == target_class_id)
+    target_class = classification_da == target_class_id
 
     # 2. Boolean mask for all non-NaN (classified) pixels
     is_classified = classification_da.notnull()
@@ -330,42 +319,49 @@ def output(
 
     # 5. Set other classified areas to 0.0
     #    Other marine benethic habitats but not NaNs.
-    binary_output_float = xr.where(is_classified & ~target_class, 0.0, binary_output_float)
+    binary_output_float = xr.where(
+        is_classified & ~target_class, 0.0, binary_output_float
+    )
 
     # 6. Handle final dtype conversion and NoData value
-    if output_dtype in ['uint8', 'int8', 'int16', 'int32', 'int64']:
+    if output_dtype in ["uint8", "int8", "int16", "int32", "int64"]:
         # Check if the nodata_value is valid for the chosen dtype
         dtype_info = np.iinfo(output_dtype)
         if not (dtype_info.min <= nodata_value <= dtype_info.max):
-            print(f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
-                  f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
-                  f"This might lead to unexpected results or data wrapping.")
+            print(
+                f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
+                f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
+                f"This might lead to unexpected results or data wrapping."
+            )
 
-        print(f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}.")
-        # Replace NaNs with the specified nodata_value 
+        print(
+            f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}."
+        )
+        # Replace NaNs with the specified nodata_value
         final_output = binary_output_float.fillna(nodata_value).astype(output_dtype)
         # Add nodata attributes for GeoTIFF writing, crucial for GIS software
-        final_output.attrs['_FillValue'] = nodata_value
-        final_output.attrs['nodata'] = nodata_value # Common attribute for geospatial data
-    else: # For float types, NaN is the natural nodata
+        final_output.attrs["_FillValue"] = nodata_value
+        final_output.attrs["nodata"] = (
+            nodata_value  # Common attribute for geospatial data
+        )
+    else:  # For float types, NaN is the natural nodata
         final_output = binary_output_float.astype(output_dtype)
         # Ensure _FillValue is set if there's an original nodata value in the input
-        if '_FillValue' in classification_da.attrs:
-            final_output.attrs['_FillValue'] = classification_da.attrs['_FillValue']
-        elif 'nodata' in classification_da.attrs:
-            final_output.attrs['nodata'] = classification_da.attrs['nodata']
+        if "_FillValue" in classification_da.attrs:
+            final_output.attrs["_FillValue"] = classification_da.attrs["_FillValue"]
+        elif "nodata" in classification_da.attrs:
+            final_output.attrs["nodata"] = classification_da.attrs["nodata"]
 
     return final_output
 
 
-
 def probability(
     ds: xr.Dataset,
-    model, # Your trained scikit-learn model (e.g., RandomForestClassifier)
-    bands: list[str], # List of band names to use as features
-    target_class_id: int, # The class ID for which to return probabilities
-    no_data_value: int = -9999, # Value used for no-data in your input data (if applicable)
-    scale_to_100: bool = True # Whether to scale probabilities from 0-1 to 0-100
+    model,  # Your trained scikit-learn model (e.g., RandomForestClassifier)
+    bands: list[str],  # List of band names to use as features
+    target_class_id: int,  # The class ID for which to return probabilities
+    no_data_value: int = -9999,  # Value used for no-data in your input data (if applicable)
+    scale_to_100: bool = True,  # Whether to scale probabilities from 0-1 to 0-100
 ) -> xr.DataArray:
     """
     Generates a probability raster for a specific target class from a trained
@@ -402,7 +398,9 @@ def probability(
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Input 'ds' must be an xarray.Dataset.")
     if target_class_id not in model.classes_:
-        raise ValueError(f"Target class ID {target_class_id} not found in model classes: {model.classes_}")
+        raise ValueError(
+            f"Target class ID {target_class_id} not found in model classes: {model.classes_}"
+        )
 
     # print(f"Generating probability raster for class ID: {target_class_id}")
 
@@ -416,35 +414,48 @@ def probability(
     # This also ensures that if 'time' is a dimension, it's handled correctly
     # by ensuring its coordinate is numeric if present.
     ds_copy = ds.copy()
-    
+
     # Check and convert 'y' coordinate
-    if 'y' in ds_copy.coords and ds_copy['y'].dtype.kind not in ['i', 'f']: # if not integer or float
+    if "y" in ds_copy.coords and ds_copy["y"].dtype.kind not in [
+        "i",
+        "f",
+    ]:  # if not integer or float
         print(f"DEBUG: Converting 'y' coordinate from {ds_copy['y'].dtype} to float.")
-        ds_copy['y'] = ds_copy['y'].astype(float)
-    
+        ds_copy["y"] = ds_copy["y"].astype(float)
+
     # Check and convert 'x' coordinate
-    if 'x' in ds_copy.coords and ds_copy['x'].dtype.kind not in ['i', 'f']: # if not integer or float
+    if "x" in ds_copy.coords and ds_copy["x"].dtype.kind not in [
+        "i",
+        "f",
+    ]:  # if not integer or float
         print(f"DEBUG: Converting 'x' coordinate from {ds_copy['x'].dtype} to float.")
-        ds_copy['x'] = ds_copy['x'].astype(float)
+        ds_copy["x"] = ds_copy["x"].astype(float)
 
     # Check and convert 'time' coordinate if it exists and is not numeric/datetime
-    if 'time' in ds_copy.coords and ds_copy['time'].dtype.kind not in ['i', 'f', 'M']: # M for datetime64
-        print(f"DEBUG: Converting 'time' coordinate from {ds_copy['time'].dtype} to datetime64[ns].")
+    if "time" in ds_copy.coords and ds_copy["time"].dtype.kind not in [
+        "i",
+        "f",
+        "M",
+    ]:  # M for datetime64
+        print(
+            f"DEBUG: Converting 'time' coordinate from {ds_copy['time'].dtype} to datetime64[ns]."
+        )
         # Use pandas.to_datetime for robust conversion of time-like strings/objects
-        ds_copy['time'] = pd.to_datetime(ds_copy['time'].values)
+        ds_copy["time"] = pd.to_datetime(ds_copy["time"].values)
     # --- END NEW FIX ---
 
     # 1. Select the relevant bands and stack spatial dimensions
-    features_ds = ds_copy[bands] # Selects only the specified bands from the potentially modified copy
-    
+    features_ds = ds_copy[
+        bands
+    ]  # Selects only the specified bands from the potentially modified copy
+
     # Check if 'time' is a dimension in features_ds. If so, stack it as well
     # to flatten all samples across time and space.
-    stack_dims = ['y', 'x']
-    if 'time' in features_ds.dims:
-        stack_dims.insert(0, 'time') # Add time as the first dimension to stack
+    stack_dims = ["y", "x"]
+    if "time" in features_ds.dims:
+        stack_dims.insert(0, "time")  # Add time as the first dimension to stack
 
     features_stacked = features_ds.stack(pixel=stack_dims)
-
 
     # 2. Convert to a Pandas DataFrame
     features_df = features_stacked.to_dataframe()
@@ -454,7 +465,9 @@ def probability(
     # (like y, x, time, spatial_ref) to regular columns if they are also coordinates.
     # We only want the actual feature bands.
     # Only drop columns that are actually present in the DataFrame's columns
-    columns_to_drop = [col for col in ["y", "x", "time", "spatial_ref"] if col in features_df.columns]
+    columns_to_drop = [
+        col for col in ["y", "x", "time", "spatial_ref"] if col in features_df.columns
+    ]
     if columns_to_drop:
         features_df = features_df.drop(columns=columns_to_drop)
     # --- END NEW FIX ---
@@ -468,7 +481,7 @@ def probability(
     original_pixel_index = features_df.index
 
     # Ensure all features are numeric before dropping NaNs
-    features_for_prediction_df = features_df.apply(pd.to_numeric, errors='coerce')
+    features_for_prediction_df = features_df.apply(pd.to_numeric, errors="coerce")
     features_for_prediction_df = features_for_prediction_df.dropna()
 
     # Filter out rows where all feature values are equal to no_data_value
@@ -488,7 +501,7 @@ def probability(
     # --- NEW CHECK FOR FEATURE COUNT ---
     expected_features = model.n_features_in_
     actual_features = features_for_prediction_np.shape[1]
-    
+
     # --- DEBUGGING START ---
     # print(f"DEBUG: Shape of features_for_prediction_np (after processing): {features_for_prediction_np.shape}")
     # print(f"DEBUG: Model expects {expected_features} features (model.n_features_in_).")
@@ -516,15 +529,15 @@ def probability(
     # Create a temporary DataArray with the probabilities and the valid pixel index
     temp_prob_1d_da = xr.DataArray(
         target_class_probabilities_1d,
-        coords={'pixel': valid_pixel_index}, # Use the MultiIndex as the coordinate
-        dims=['pixel']
+        coords={"pixel": valid_pixel_index},  # Use the MultiIndex as the coordinate
+        dims=["pixel"],
     )
 
     # Unstack the 'pixel' dimension back into original spatial dimensions (e.g., 'y', 'x' or 'time', 'y', 'x')
     # This creates a DataArray with probabilities in the correct spatial locations.
     # It will have NaNs where pixels were originally dropped.
     # The dimensions for unstacking should match those used in features_stacked.stack()
-    unstacked_prob_da = temp_prob_1d_da.unstack('pixel')
+    unstacked_prob_da = temp_prob_1d_da.unstack("pixel")
 
     # Create the final probability_da with the full original grid from ds_copy[bands[0]]
     # and then update it with the unstacked probabilities.
@@ -533,7 +546,7 @@ def probability(
     # Use ds_copy[bands[0]] as the template, as it has the correct original dimensions and coordinates
     # (and its coordinates have been converted to numeric types if needed).
     probability_da = xr.full_like(ds_copy[bands[0]], np.nan, dtype=float)
-    probability_da.name = f'probability_class_{target_class_id}'
+    probability_da.name = f"probability_class_{target_class_id}"
 
     # Combine the full NaN template with the unstacked probabilities.
     # This will fill in the computed probabilities where they exist,
@@ -557,11 +570,12 @@ def probability(
     print("Probability raster generation complete.")
     return probability_da
 
+
 def proba_binary(
     probability_da: xr.DataArray,
-    threshold: float, # Threshold value (e.g., 60 for 80%)
-    output_dtype: str = 'uint8',
-    nodata_value: int = 255 # Value to use for NoData if output_dtype is an integer type
+    threshold: float,  # Threshold value (e.g., 60 for 80%)
+    output_dtype: str = "uint8",
+    nodata_value: int = 255,  # Value to use for NoData if output_dtype is an integer type
 ) -> xr.DataArray:
     """
     Converts a probability raster into a binary classification raster based on a threshold.
@@ -591,7 +605,7 @@ def proba_binary(
     print(f"Thresholding probability raster at {threshold}% to binary output.")
 
     # 1. Boolean mask for pixels above or equal to the threshold
-    is_above_threshold = (probability_da >= threshold)
+    is_above_threshold = probability_da >= threshold
 
     # 2. Boolean mask for all non-NaN (valid) pixels
     is_valid_data = probability_da.notnull()
@@ -605,36 +619,45 @@ def proba_binary(
 
     # 5. Set pixels below threshold (but valid data) to 0.0
     #    This applies where it's valid data AND below the threshold.
-    binary_output_float = xr.where(is_valid_data & ~is_above_threshold, 0.0, binary_output_float)
+    binary_output_float = xr.where(
+        is_valid_data & ~is_above_threshold, 0.0, binary_output_float
+    )
 
     # 6. Handle final dtype conversion and NoData value
-    if output_dtype in ['uint8', 'int8', 'int16', 'int32', 'int64']:
+    if output_dtype in ["uint8", "int8", "int16", "int32", "int64"]:
         # Check if the nodata_value is valid for the chosen dtype
         dtype_info = np.iinfo(output_dtype)
         if not (dtype_info.min <= nodata_value <= dtype_info.max):
-            print(f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
-                  f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
-                  f"This might lead to unexpected results or data wrapping.")
+            print(
+                f"Warning: `nodata_value` ({nodata_value}) is outside the valid range "
+                f"for `output_dtype` ({output_dtype}) which is [{dtype_info.min}, {dtype_info.max}]. "
+                f"This might lead to unexpected results or data wrapping."
+            )
 
-        print(f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}.")
+        print(
+            f"Casting to {output_dtype} and converting NaN (original no data) values to {nodata_value}."
+        )
         # Replace NaNs with the specified nodata_value before casting to integer type
         final_output = binary_output_float.fillna(nodata_value).astype(output_dtype)
         # Add nodata attributes for GeoTIFF writing, crucial for GIS software
-        final_output.attrs['_FillValue'] = nodata_value
-        final_output.attrs['nodata'] = nodata_value # Common attribute for geospatial data
-    else: # For float types, NaN is the natural nodata
+        final_output.attrs["_FillValue"] = nodata_value
+        final_output.attrs["nodata"] = (
+            nodata_value  # Common attribute for geospatial data
+        )
+    else:  # For float types, NaN is the natural nodata
         final_output = binary_output_float.astype(output_dtype)
         # Ensure _FillValue is set if there's an original nodata value in the input
-        if '_FillValue' in probability_da.attrs:
-            final_output.attrs['_FillValue'] = probability_da.attrs['_FillValue']
-        elif 'nodata' in probability_da.attrs:
-            final_output.attrs['nodata'] = probability_da.attrs['nodata']
+        if "_FillValue" in probability_da.attrs:
+            final_output.attrs["_FillValue"] = probability_da.attrs["_FillValue"]
+        elif "nodata" in probability_da.attrs:
+            final_output.attrs["nodata"] = probability_da.attrs["nodata"]
 
     return final_output
 
+
 # import geopandas as gpd
 import os
-import pandas as pd # Explicitly import pandas as it's used by geopandas.pd.concat
+import pandas as pd  # Explicitly import pandas as it's used by geopandas.pd.concat
 
 
 def standardise(
@@ -645,8 +668,8 @@ def standardise(
     category_to_id_map: dict = None,
     id_to_category_map: dict = None,
     default_unmapped_id: int = 0,
-    output_file_format: str = "geojson", # New parameter for output format
-    **kwargs # Allows passing extra arguments to gpd.read_file and gpd.to_file
+    output_file_format: str = "geojson",  # New parameter for output format
+    **kwargs,  # Allows passing extra arguments to gpd.read_file and gpd.to_file
 ) -> None:
     """
     Loads spatial files from an input folder, standardises their schema (observed, cc_id),
@@ -675,7 +698,9 @@ def standardise(
                 For example, for reading CSVs: `sep=','`, `on_bad_lines='skip'`.
                 For writing GeoJSONs: `driver='GeoJSON'`.
     """
-    print(f"Starting standardization and resaving process from '{input_folder_path}' to '{output_folder_path}'.")
+    print(
+        f"Starting standardization and resaving process from '{input_folder_path}' to '{output_folder_path}'."
+    )
 
     # Create output folder if it doesn't exist
     os.makedirs(output_folder_path, exist_ok=True)
@@ -694,53 +719,74 @@ def standardise(
     # List all files in the input folder
     for filename in os.listdir(input_folder_path):
         file_path = os.path.join(input_folder_path, filename)
-        
+
         if os.path.isfile(file_path) and filename.endswith(file_extension):
             try:
                 gdf = gpd.read_file(file_path, **kwargs)
-                
+
                 print(f"\nProcessing: {filename}")
 
                 # --- Schema and Category Handling ---
-                
+
                 # 1. standardise category column name to 'observed'
                 found_category_col = None
                 for col in gdf.columns:
-                    if col.lower() in ['observed', 'category', 'class_name', 'classname', 'label']:
+                    if col.lower() in [
+                        "observed",
+                        "category",
+                        "class_name",
+                        "classname",
+                        "label",
+                    ]:
                         found_category_col = col
                         break
-                
-                if found_category_col and found_category_col != 'observed':
-                    gdf = gdf.rename(columns={found_category_col: 'observed'})
+
+                if found_category_col and found_category_col != "observed":
+                    gdf = gdf.rename(columns={found_category_col: "observed"})
                     print(f"  Renamed '{found_category_col}' to 'observed'.")
-                elif not found_category_col and 'cc_id' in gdf.columns and id_to_category_map:
-                    gdf['observed'] = gdf['cc_id'].map(id_to_category_map)
+                elif (
+                    not found_category_col
+                    and "cc_id" in gdf.columns
+                    and id_to_category_map
+                ):
+                    gdf["observed"] = gdf["cc_id"].map(id_to_category_map)
                     print(f"  Created 'observed' from 'cc_id'.")
                 elif not found_category_col:
-                    print(f"  Warning: No 'observed' or similar category column found. "
-                          "Attempting to proceed, but 'observed' column might be missing or incorrect.")
+                    print(
+                        f"  Warning: No 'observed' or similar category column found. "
+                        "Attempting to proceed, but 'observed' column might be missing or incorrect."
+                    )
 
                 # 2. Rename 'seaweed' to 'algae' in the 'observed' column
-                if 'observed' in gdf.columns:
-                    gdf['observed'] = gdf['observed'].astype(str)
-                    original_seaweed_count = (gdf['observed'] == 'seaweed').sum()
+                if "observed" in gdf.columns:
+                    gdf["observed"] = gdf["observed"].astype(str)
+                    original_seaweed_count = (gdf["observed"] == "seaweed").sum()
                     if original_seaweed_count > 0:
-                        gdf['observed'] = gdf['observed'].replace('seaweed', 'algae')
-                        print(f"  Renamed 'seaweed' to 'algae' ({original_seaweed_count} instances).")
-                
+                        gdf["observed"] = gdf["observed"].replace("seaweed", "algae")
+                        print(
+                            f"  Renamed 'seaweed' to 'algae' ({original_seaweed_count} instances)."
+                        )
+
                 # 3. Ensure 'cc_id' column based on 'observed' and canonical mapping
-                if 'observed' in gdf.columns and category_to_id_map:
-                    gdf['cc_id'] = gdf['observed'].map(category_to_id_map).fillna(default_unmapped_id).astype(int)
+                if "observed" in gdf.columns and category_to_id_map:
+                    gdf["cc_id"] = (
+                        gdf["observed"]
+                        .map(category_to_id_map)
+                        .fillna(default_unmapped_id)
+                        .astype(int)
+                    )
                     print(f"  Ensured 'cc_id' column.")
-                elif 'cc_id' not in gdf.columns:
+                elif "cc_id" not in gdf.columns:
                     print(f"  Warning: No 'cc_id' column could be created or found.")
 
                 # --- Robust CRS Handling ---
                 if target_crs:
                     if gdf.crs is None:
-                        print(f"  Warning: File has no CRS. Assuming it's in {target_crs} and setting CRS.")
+                        print(
+                            f"  Warning: File has no CRS. Assuming it's in {target_crs} and setting CRS."
+                        )
                         gdf = gdf.set_crs(target_crs, allow_override=True)
-                    
+
                     if gdf.crs is not None and gdf.crs != target_crs:
                         print(f"  Reprojecting from {gdf.crs} to {target_crs}...")
                         gdf = gdf.to_crs(target_crs)
@@ -748,7 +794,7 @@ def standardise(
                         print(f"  File is already in target CRS: {target_crs}.")
                 else:
                     print(f"  No target_crs specified. Keeping original CRS: {gdf.crs}")
-                
+
                 # --- Save the processed GeoDataFrame ---
                 # Construct output filename, preserving original name but changing extension if needed
                 name_without_ext = os.path.splitext(filename)[0]
@@ -756,17 +802,21 @@ def standardise(
                 output_file_path = os.path.join(output_folder_path, output_filename)
 
                 # Remove kwargs that are only for reading, if any, before passing to to_file
-                write_kwargs = {k: v for k, v in kwargs.items() if k not in ['sep', 'on_bad_lines', 'encoding']}
-                
+                write_kwargs = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k not in ["sep", "on_bad_lines", "encoding"]
+                }
+
                 # Specify driver for writing, especially for geojson/shapefile
                 driver_map = {
                     "geojson": "GeoJSON",
                     "shp": "ESRI Shapefile",
-                    "csv": "CSV" # GeoPandas can write CSV, but geometry will be lost unless specified
+                    "csv": "CSV",  # GeoPandas can write CSV, but geometry will be lost unless specified
                 }
                 driver = driver_map.get(output_file_format.lower(), None)
                 if driver:
-                    write_kwargs['driver'] = driver
+                    write_kwargs["driver"] = driver
 
                 gdf.to_file(output_file_path, **write_kwargs)
                 print(f"  Saved processed file to: {output_file_path}")
@@ -780,6 +830,7 @@ def standardise(
             print(f"  Skipping directory: {filename}")
         else:
             print(f"  Skipping non-{file_extension} file: {filename}")
-    
-    print(f"\nStandardization and resaving complete. Processed {processed_count} files, skipped {skipped_count} files.")
 
+    print(
+        f"\nStandardization and resaving complete. Processed {processed_count} files, skipped {skipped_count} files."
+    )
