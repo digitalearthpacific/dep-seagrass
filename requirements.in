@@ -1,5 +1,5 @@
 dask[complete]
-dep-tools @ git+https://github.com/digitalearthpacific/dep-tools.git
+dep-tools @ git+https://github.com/digitalearthpacific/dep-tools.git@8cfd29b
 GDAL==3.10.0
 geopandas
 joblib
@@ -11,7 +11,9 @@ pystac
 pystac_client
 pyproj
 rasterio
+requests
 scikit-image
+scikit-learn==1.7.0 # To match model file version
 shapely
 rioxarray
 typer

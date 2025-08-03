@@ -99,7 +99,7 @@ dask-image==2024.5.3
     # via odc-algo
 decorator==5.2.1
     # via retry
-dep-tools @ git+https://github.com/digitalearthpacific/dep-tools.git
+dep-tools @ git+https://github.com/digitalearthpacific/dep-tools.git@8cfd29b
     # via -r requirements.in
 distributed==2025.7.0
     # via
@@ -145,7 +145,9 @@ jmespath==1.0.1
     #   boto3
     #   botocore
 joblib==1.5.1
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   scikit-learn
 jsonschema==4.25.0
     # via pystac
 jsonschema-specifications==2025.4.1
@@ -198,6 +200,7 @@ numpy==1.26.4
     #   rasterio
     #   rioxarray
     #   scikit-image
+    #   scikit-learn
     #   scipy
     #   shapely
     #   stackstac
@@ -329,6 +332,7 @@ referencing==0.36.2
     #   jsonschema-specifications
 requests==2.32.4
     # via
+    #   -r requirements.in
     #   azure-core
     #   planetary-computer
     #   pystac-client
@@ -354,11 +358,14 @@ scikit-image==0.25.2
     # via
     #   -r requirements.in
     #   odc-algo
+scikit-learn==1.7.0
+    # via -r requirements.in
 scipy==1.16.1
     # via
     #   dask-image
     #   geocube
     #   scikit-image
+    #   scikit-learn
 shapely==2.1.1
     # via
     #   -r requirements.in
@@ -379,6 +386,8 @@ stackstac==0.5.1
     # via dep-tools
 tblib==3.1.0
     # via distributed
+threadpoolctl==3.6.0
+    # via scikit-learn
 tifffile==2025.6.11
     # via
     #   dask-image
