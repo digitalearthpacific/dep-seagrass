@@ -25,7 +25,7 @@ class SeagrassProcessor(Processor):
         scaled_data = scale(input_data).squeeze(drop=True)
         scaled_data = calculate_band_indices(scaled_data)
         masked_scaled, mask = all_masks(scaled_data, return_mask=True)
-        # Eroding the texture mask by factor of (window size/2 i.e. 4.5)
+        # Eroding the texture mask by factor of (window size/2 i.e. 4.5 - need to test result)
         texture_mask = binary_erosion(mask, radius=4.5)
         texture_data = scaled_data.blue.where(texture_mask)
         texture_data = texture(masked_scaled.blue)
