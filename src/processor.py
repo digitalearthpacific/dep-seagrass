@@ -1,5 +1,8 @@
 from dep_tools.processors import Processor
 import xarray as xr
+from odc.algo import binary_erosion
+
+
 
 from masking import all_masks
 from utils import (
@@ -21,7 +24,10 @@ class SeagrassProcessor(Processor):
     def process(self, input_data: xr.Dataset) -> xr.Dataset:
         scaled_data = scale(input_data).squeeze(drop=True)
         scaled_data = calculate_band_indices(scaled_data)
-        masked_scaled, _ = all_masks(scaled_data, return_mask=True)
+        masked_scaled, mask = all_masks(scaled_data, return_mask=True)
+        # Eroding the texture mask by factor of (window size/2 i.e. 4.5)
+        texture_mask = binary_erosion(mask, radius=4.5)
+        texture_data = scaled_data.blue.where(texture_mask)
         texture_data = texture(masked_scaled.blue)
         # Getting dask errors without this compute, not sure why
         # But it probably makes sense, if we're not getting memory errors,
