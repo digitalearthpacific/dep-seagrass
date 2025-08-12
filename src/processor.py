@@ -28,7 +28,7 @@ class SeagrassProcessor(Processor):
         # Eroding the texture mask by factor of (window size/2 i.e. 4.5 - need to test result)
         texture_mask = binary_erosion(mask, radius=4.5)
         texture_data = scaled_data.blue.where(texture_mask)
-        texture_data = texture(masked_scaled.blue)
+        texture_data = texture(texture_data)
         # Getting dask errors without this compute, not sure why
         # But it probably makes sense, if we're not getting memory errors,
         # since do_prediction and probability probably each load into memory
