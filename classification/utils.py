@@ -149,121 +149,37 @@ def mask_land(
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 
-# def mask_surf(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     threshold: float = 0.001,
-#     return_mask: bool = False,
-#     dilation_radius: int = 20, # <--- NEW PARAMETER ADDED HERE
-# ) -> Dataset:
-#     """Masks out surf / white water pixels based on the nir
-
-#     Args:
-#         ds (Dataset): Dataset to mask
-#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
-#         threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.001.
-#         dilation_radius (int, optional): Radius for binary dilation to expand the mask. Defaults to 20.
-#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
-
-#     Returns:
-#         Dataset: Masked dataset
-#     """
-#     mask = ds.nir > threshold
-#     mask = mask.chunk({'x': 512, 'y': 512}) # Keep this if it's necessary for your Dask workflow
-
-#     # Convert to boolean before dilation to ensure it's treated as a binary mask
-#     mask_bool = mask.astype(bool)
-
-#     # Pass the new dilation_radius parameter to binary_dilation
-#     dilated_mask = binary_dilation(mask_bool, radius=dilation_radius) # <--- USE THE PARAMETER HERE
-
-#     return apply_mask(ds, dilated_mask, ds_to_mask, return_mask)
-
-
-# def mask_surf(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     threshold: float = 0.001,
-#     return_mask: bool = False,
-# ) -> Dataset:
-#     """Masks out surf / white water pixels based on the nir
-
-#     Args:
-#         ds (Dataset): Dataset to mask
-#         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
-#         threshold (float, optional): Threshold for the NIR value to identify surf. Defaults to 0.001.
-#         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
-
-#     Returns:
-#         Dataset: Masked dataset
-#     """
-# from scipy.ndimage import binary_dilation, generate_binary_structure
-# # If you prefer to use skimage.morphology.disk, ensure it's imported:
-# # from skimage.morphology import disk
-# import numpy as np # Needed for np.ones for structuring element fallback
-
-# # Assuming Dataset and apply_mask are defined elsewhere in your utils.py
-# # (They were in your previous full utils.py immersive)
-
 def mask_surf(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
     threshold: float = 0.001,
     return_mask: bool = False,
+    dilation_radius: int = 20, # <--- NEW PARAMETER ADDED HERE
 ) -> Dataset:
     """Masks out surf / white water pixels based on the nir
 
     Args:
         ds (Dataset): Dataset to mask
         ds_to_mask (Dataset | None, optional): Dataset to mask. Defaults to None.
-        threshold (float, optional): Threshold for the NIR value to identify surf. Defaults to 0.001.
+        threshold (float, optional): Threshold for the natural log of the blue/green. Defaults to 0.001.
+        dilation_radius (int, optional): Radius for binary dilation to expand the mask. Defaults to 20.
         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
 
     Returns:
         Dataset: Masked dataset
     """
-    # 1. Create the initial binary mask for surf
-    initial_mask = ds.nir > threshold
+    mask = ds.nir > threshold
+    mask = mask.chunk({'x': 512, 'y': 512}) # Keep this if it's necessary for your Dask workflow
 
-    # 2. Chunking is appropriate for Dask arrays
-    initial_mask = initial_mask.chunk({'x': 512, 'y': 512})
+    # Convert to boolean before dilation to ensure it's treated as a binary mask
+    mask_bool = mask.astype(bool)
 
-    # 3. Define the structuring element for binary_dilation
-    # For scipy.ndimage.binary_dilation, 'radius' is not a direct argument.
-    # Instead, you create a structuring element (e.g., a disk/sphere).
+    # Pass the new dilation_radius parameter to binary_dilation
+    dilated_mask = binary_dilation(mask_bool, radius=dilation_radius) # <--- USE THE PARAMETER HERE
 
-    dilation_radius = 40 # The desired dilation radius in pixels
+    return apply_mask(ds, dilated_mask, ds_to_mask, return_mask)
 
-    try:
-        # Attempt to use skimage.morphology.disk for a circular structuring element
-        # This is generally preferred for creating disks for dilation
-        from skimage.morphology import disk
-        structuring_element = disk(dilation_radius)
-    except ImportError:
-        # Fallback if scikit-image is not installed or disk is unavailable
-        # generate_binary_structure creates a connectivity-based structure, not strictly a disk.
-        # For a large 'radius', generate_binary_structure can create very large, sparse arrays.
-        # A simpler approach for approximate large radius with scipy might be a large square:
-        print("Warning: skimage.morphology.disk not found. Using approximate square structuring element.")
-        structuring_element = np.ones((2 * dilation_radius + 1, 2 * dilation_radius + 1), dtype=bool)
 
-    # 4. Perform the binary dilation using the 'structure' argument
-    # Ensure initial_mask is computed or handled by Dask correctly before dilation
-    # It's good practice to compute small masks if they fit in memory before passing to scipy.ndimage functions
-    # For potentially large masks, scipy.ndimage might operate better if they are NumPy arrays.
-    # If initial_mask is an xarray DataArray with Dask chunks, binary_dilation might implicitly compute.
-    # For explicit computation if needed: initial_mask.compute().values
-    print(f"DEBUG: initial_mask min: {initial_mask.min().compute()}, max: {initial_mask.max().compute()}")
-    print(f"DEBUG: initial_mask sum (True pixels): {initial_mask.sum().compute()}")
-    # Optionally, save or plot the initial mask for visual inspection
-    # initial_mask.plot(figsize=(8,8), cmap='gray') # Requires matplotlib
-    # plt.show()
-    
-    # Pass the structuring_element as the 'structure' argument
-    expanded_mask = binary_dilation(initial_mask, structure=structuring_element)
-
-    # 5. Crucially: Return the *expanded_mask*, not the original initial_mask
-    return apply_mask(ds, expanded_mask, ds_to_mask, return_mask)
 
 def mask_deeps(
     ds: Dataset,
