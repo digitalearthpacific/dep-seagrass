@@ -227,15 +227,6 @@ def mask_surf(
     # 5. Perform the final binary dilation to create the desired buffer around surf areas
     final_dilated_surf_mask = oda_binary_dilation(cleaned_surf_mask, radius=surf_dilation_radius)
 
-    # 6. Return the masked dataset or the final mask
-    # Remember: apply_mask expects the 'mask' argument to be True for KEEP, False for MASK OUT.
-    # If final_dilated_surf_mask is True for surf (areas to be masked OUT), you might need to invert it
-    # depending on how your overall masking logic is structured in all_masks.
-    # For now, let's assume this mask (True for surf) is what you want to return for masking OUT.
-    # If this mask represents areas to be *removed*, then in all_masks, you'd use `~final_dilated_surf_mask`
-    # in the combination, or this function could return `~final_dilated_surf_mask` directly.
-    # Given the prompt, this mask is for "eliminating areas that are not seagrass habitats", so it is True for surf areas to be removed.
-    
     # For consistency with other masks (e.g., land_mask, deeps_mask) in `all_masks` that are True for areas to KEEP,
     # let's return a mask that is TRUE for "NOT SURF" areas.
     # The surf areas are to be ELIMINATED, so the mask for keep would be `~final_dilated_surf_mask`.
@@ -243,66 +234,6 @@ def mask_surf(
 
     return apply_mask(ds, mask_to_return_for_keeping, ds_to_mask, return_mask)
 
-# def mask_surf(
-#     ds: Dataset,
-#     ds_to_mask: Dataset | None = None,
-#     threshold: float = 0.001,
-#     return_mask: bool = False,
-#     dilation_radius: int = 20,
-# ) -> Dataset:
-#     """Masks out surf / white water pixels based on the nir.
-    
-#     This function applies a threshold to the NIR band to identify surf/whitewater,
-#     then expands (dilates) these identified areas to create a buffer.
-
-#     Args:
-#         ds (Dataset): The input xarray Dataset containing the NIR band.
-#         ds_to_mask (Dataset | None, optional): The dataset to which the mask will be applied.
-#                                                If None, 'ds' will be masked. Defaults to None.
-#         threshold (float, optional): The NIR value above which pixels are initially
-#                                      identified as surf/whitewater. Defaults to 0.001.
-#         dilation_radius (int, optional): The radius in pixels for the binary dilation
-#                                          to expand the surf mask. Defaults to 20.
-#         return_mask (bool, optional): If True, returns the binary mask itself.
-#                                       Otherwise, returns the masked dataset. Defaults to False.
-
-#     Returns:
-#         Dataset: The masked dataset, or the binary mask if 'return_mask' is True.
-#     """
-#     # 1. Create the initial binary mask for surf based on the threshold
-#     # The result of ds.nir > threshold is already a boolean xarray DataArray.
-#     initial_mask = ds.nir > threshold
-
-#     # 2. Chunking for Dask arrays: Ensure the mask is chunked appropriately if ds.nir is Dask-backed
-#     initial_mask = initial_mask.chunk({'x': 512, 'y': 512})
-
-#     # 3. Create the structuring element for binary_dilation
-#     # binary_dilation from scipy.ndimage expects a 'structure' argument, not 'radius'.
-#     # We use skimage.morphology.disk for a circular structuring element.
-#     # If skimage is not available, a square (np.ones) element is used as a fallback.
-#     structuring_element = disk(dilation_radius)
-
-#     # 4. Perform the binary dilation using the 'structure' argument.
-#     # It's important that binary_dilation receives a NumPy array.
-#     # If initial_mask is an xarray DataArray, its .values attribute gives the underlying NumPy/Dask array.
-#     # However, scipy.ndimage functions are often Dask-aware if the input array is Dask-backed.
-#     # Using .compute() here would force computation into memory, which might be undesirable for large arrays.
-#     # If using .values with a Dask array, you might get a Dask array back, which is fine.
-    
-#     # Ensure the input to binary_dilation is a boolean NumPy array (or Dask array of booleans)
-#     # xarray DataArrays can often be passed directly to scipy.ndimage, which will handle Dask for you.
-#     dilated_mask_values = binary_dilation(initial_mask.values, structure=structuring_element)
-
-#     # Convert the dilated NumPy array back to an xarray DataArray with original coordinates
-#     expanded_mask = xr.DataArray(
-#         dilated_mask_values,
-#         coords=initial_mask.coords,
-#         dims=initial_mask.dims
-#     )
-
-#     # 5. Return the result by applying the expanded mask
-#     # The apply_mask function likely expects an xarray DataArray for the mask.
-#     return apply_mask(ds, expanded_mask, ds_to_mask, return_mask)
 
 
 def mask_deeps(
