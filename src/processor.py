@@ -3,7 +3,6 @@ import xarray as xr
 from odc.algo import binary_erosion
 
 
-
 from masking import all_masks
 from utils import (
     calculate_band_indices,
