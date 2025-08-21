@@ -84,7 +84,7 @@ def mask_surf(
 
     # The water_area_mask is now expected to be already buffered/processed
     # from mask_land's new logic (MNDWI + SWIR).
-    buffered_water_area_mask = water_area_mask # Direct use of the provided water_area_mask
+    water_area_mask = water_area_mask # Direct use of the provided water_area_mask
 
 
     # 1. Create the initial raw surf mask based on multi-band high reflectance
@@ -101,7 +101,7 @@ def mask_surf(
     # 2. Refine the raw surf mask to only include areas within the buffered water
     # This excludes bright land features and areas very close to land
     # --- FIX: Directly use the provided water_area_mask for refinement ---
-    refined_surf_mask = initial_surf_mask_raw & buffered_water_area_mask
+    refined_surf_mask = initial_surf_mask_raw & water_area_mask
     
     # Ensure it's chunked and boolean
     refined_surf_mask = refined_surf_mask.chunk({'x': 512, 'y': 512}).astype(bool)
