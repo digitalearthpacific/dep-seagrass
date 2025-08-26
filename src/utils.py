@@ -185,7 +185,7 @@ def probability(
     model,
     bands: list[str],
     target_class_id: int,
-    no_data_value: int = -9999,
+    no_data_value: int = 255, # was -9999
     scale_to_100: bool = True,
 ) -> xr.DataArray:
     """
@@ -466,6 +466,7 @@ def proba_binary(
         # Replace NaNs with the specified nodata_value before casting to integer type
         final_output = binary_output_float.fillna(nodata_value).astype(output_dtype)
         # Add nodata attributes for GeoTIFF writing, crucial for GIS software
+        nodata_value = 255
         final_output.attrs["_FillValue"] = nodata_value
         final_output.attrs["nodata"] = (
             nodata_value  # Common attribute for geospatial data
