@@ -32,11 +32,12 @@ class SeagrassProcessor(Processor):
         # But it probably makes sense, if we're not getting memory errors,
         # since do_prediction and probability probably each load into memory
         combined_data = xr.merge([masked_scaled, texture_data]).compute()
-        no_data_value = 255
         classification = (
             do_prediction(combined_data, self._model)
             .fillna(no_data_value)
             .astype("uint8")
+        classification.attrs["nodata"] = no_data_value,
+        classification.attrs["_FillValue"] = no_data_value
         )
         seagrass_code = 4
         seagrass_probability = probability(
@@ -47,8 +48,8 @@ class SeagrassProcessor(Processor):
             target_class_id=seagrass_code,
             # I _think_ this is the correct usage
             no_data_value=float("nan"),
-            classification.attrs["nodata"] = no_data_value,
-            classification.attrs["_FillValue"] = no_data_value
+            # Adding this section based on advice from JA around final output nodata attributes
+            
         )
         seagrass_extent = proba_binary(seagrass_probability, 60, nodata_value=255)
         return xr.Dataset(
