@@ -47,6 +47,8 @@ class SeagrassProcessor(Processor):
             target_class_id=seagrass_code,
             # I _think_ this is the correct usage
             no_data_value=float("nan"),
+            classification.attrs["nodata"] = no_data_value,
+            classification.attrs["_FillValue"] = no_data_value
         )
         seagrass_extent = proba_binary(seagrass_probability, 60, nodata_value=255)
         return xr.Dataset(
