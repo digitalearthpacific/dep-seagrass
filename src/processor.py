@@ -36,7 +36,7 @@ class SeagrassProcessor(Processor):
             do_prediction(combined_data, self._model)
             .fillna(no_data_value)
             .astype("uint8")
-        classification.attrs["nodata"] = no_data_value,
+        classification.attrs["nodata"] = no_data_value
         classification.attrs["_FillValue"] = no_data_value
         )
         seagrass_code = 4
