@@ -39,6 +39,7 @@ class SeagrassProcessor(Processor):
         classification.attrs["nodata"] = no_data_value
         classification.attrs["_FillValue"] = no_data_value
         )
+        
         seagrass_code = 4
         seagrass_probability = probability(
             ds=combined_data,

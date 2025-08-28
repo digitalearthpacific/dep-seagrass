@@ -185,7 +185,7 @@ def probability(
     model,
     bands: list[str],
     target_class_id: int,
-    no_data_value: int = 255, # was -9999
+    no_data_value: int = 255,  # was -9999
     scale_to_100: bool = True,
 ) -> xr.DataArray:
     """
