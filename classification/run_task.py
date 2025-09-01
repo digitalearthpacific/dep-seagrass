@@ -22,11 +22,15 @@ def main(
     datetime: Annotated[str, typer.Option()],
     version: Annotated[str, typer.Option()],
     output_bucket: str = None,
+    model: str = "classification/models/nm-27072025-test.model",
+    probability_threshold: int = 60,
+    fast_mode: bool = True,
     xy_chunk_size: int = 1024,
+    asset_url_prefix: str | None = None,
     overwrite: Annotated[bool, typer.Option()] = False,
 ) -> None:
     log = get_logger(tile_id, "seagrass")
-    log.info("Starting processing.")
+    log.info("Starting processing")
 
     tile_index = tuple(int(i) for i in tile_id.split(","))
     grid = PACIFIC_GRID_10
@@ -59,44 +63,49 @@ def main(
         datetime=datetime,
     )
 
-    # Not sure these need to be listed because I think it's everything
-    measurements = [
-        "nir",
-        "red",
-        "blue",
-        "green",
-        "emad",
-        "smad",
-        "bcmad",
-        "green",
-        "nir08",
-        "nir09",
-        "swir16",
-        "swir22",
-        "coastal",
-        "rededge1",
-        "rededge2",
-        "rededge3",
-    ]
-
-    chunks = dict(x=xy_chunk_size, y=xy_chunk_size)
-
     loader = OdcLoader(
-        bands=measurements,
-        chunks=chunks,
+        chunks=dict(x=xy_chunk_size, y=xy_chunk_size),
         fail_on_error=False,
+        measurements=[
+            "nir",
+            "red",
+            "blue",
+            "green",
+            "emad",
+            "smad",
+            "bcmad",
+            "green",
+            "nir08",
+            "nir09",
+            "swir16",
+            "swir22",
+            "coastal",
+            "rededge1",
+            "rededge2",
+            "rededge3",
+        ],  # List measurements so we don't get count
     )
 
-    model = joblib.load("classification/models/nm-27072025-test.model")
-    processor = SeagrassProcessor(model=model)
+    # The actual processor, doing the work :muscle:
+    processor = SeagrassProcessor(
+        model=joblib.load(model),
+        probability_threshold=probability_threshold,
+        nodata_value=255,
+        fast_mode=fast_mode,
+        log=log,
+    )
 
     stac_creator = StacCreator(
-        itempath=itempath, remote=True, make_hrefs_https=True, with_raster=True
+        itempath=itempath,
+        remote=True,
+        make_hrefs_https=True,
+        with_raster=True,
+        asset_url_prefix=asset_url_prefix,
     )
 
     try:
-        with Client():
-            log.info((f"Started dask client"))
+        with Client(n_workers=4, threads_per_worker=16, memory_limit="8GB"):
+            log.info(("Started dask client"))
             paths = Task(
                 itempath=itempath,
                 id=tile_index,
@@ -115,7 +124,7 @@ def main(
         raise typer.Exit(code=1)
 
     log.info(
-        f"Completed processing. Wrote {len(paths)} items to https://{output_bucket}.s3.us-west-2.amazonaws.com/{ stac_document}"
+        f"Completed processing. Wrote {len(paths)} items to {stac_creator.stac_url(tile_id)}"
     )
 
 

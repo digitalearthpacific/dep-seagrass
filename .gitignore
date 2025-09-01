@@ -4,3 +4,5 @@
 *.csv
 *.geojson
 .ipynb_checkpoints
+
+__pycache__
