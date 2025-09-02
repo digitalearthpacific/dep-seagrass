@@ -7,3 +7,20 @@ This flow chart displays the general workflow used for seagrass habitats and wid
 
 
 For any issues with json syntax and conflict resolution, I suggest you copy all the code from the files into this https://jsonlint.com/ to validate the json code and then re-enter the code into the notebook files before doing another pull-merge request.
+
+## Testing
+
+Run the command locally or on the DEP Hub to test:
+
+``` bash
+python classification/run_task.py --tile-id 64,20 --datetime 2024 --version test --output-bucket dep-public-prod
+```
+
+
+Run this command to do multiple years in bash
+
+``` bash
+for year in {2019..2024}; do
+  python classification/run_task.py --tile-id 64,20 --datetime $year --version test --output-bucket dep-public-prod
+done
+```

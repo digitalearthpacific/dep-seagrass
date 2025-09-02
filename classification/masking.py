@@ -1,12 +1,8 @@
+from logging import Logger
 from odc.stac import load
 from pystac_client import Client
 from xarray import DataArray, Dataset
-from odc.algo import binary_dilation, mask_cleanup
-from odc.algo import (
-    binary_dilation as oda_binary_dilation,
-)  # Aliased import to prevent conflicts
-
-# from skimage.morphology import disk
+from odc.algo import binary_dilation
 
 
 def apply_mask(
@@ -36,14 +32,10 @@ def mask_land(
         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
 
     Returns:
-        Dataset: Masked dataset
+        Dataset: Masked dataset, where 1 is land and 0 is water
     """
     land = (ds.mndwi).squeeze() < -0.2
-    # mask = mask_cleanup(land, [["dilation", 5], ["erosion", 5]])
     mask = land
-
-    # Inverting the mask here
-    mask = ~mask
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
@@ -52,14 +44,14 @@ def mask_land(
 def mask_surf(
     ds: Dataset,
     ds_to_mask: Dataset | None = None,
+    water_area_mask: DataArray | None = None,
     # --- FIX: Updated default thresholds to match notebook values ---
     surf_blue_threshold: float = 0.27,  # From notebook
     surf_green_threshold: float = 0.22,  # From notebook
     surf_red_threshold: float = 0.15,  # From notebook
     surf_nir_threshold: float = 0.08,  # From notebook
-    # land_dilation_radius removed as it's handled by pre-processing water_area_mask
-    surf_cleanup_radius: int = 2,  # Notebook uses 2
     surf_dilation_radius: int = 20,  # Notebook uses 40
+    do_dilation: bool = True,
     return_mask: bool = False,
     # water_area_mask parameter removed - now derived internally
 ) -> Dataset:
@@ -80,16 +72,6 @@ def mask_surf(
     Returns:
         Dataset: The masked dataset, or the binary surf mask if 'return_mask' is True.
     """
-
-    # --- FIX: Derive water_area_mask internally by calling mask_land ---
-    # `mask_land` returns (masked_ds, mask). We only need the mask here.
-    # The mask returned by mask_land is True for water, False for land/excluded areas.
-    _, water_area_mask = mask_land(ds, return_mask=True)
-
-    # The water_area_mask is now expected to be already buffered/processed
-    # from mask_land's new logic (MNDWI + SWIR).
-    water_area_mask = water_area_mask  # Direct use of the provided water_area_mask
-
     # 1. Create the initial raw surf mask based on multi-band high reflectance
     # This identifies very bright pixels that could be surf or bright sand/noise
     initial_surf_mask_raw = (
@@ -99,30 +81,20 @@ def mask_surf(
         & (ds.nir > surf_nir_threshold)
     )
 
-    # Ensure raw mask is chunked and boolean
-    initial_surf_mask_raw = initial_surf_mask_raw.chunk({"x": 512, "y": 512}).astype(
-        bool
-    )
-
     # 2. Refine the raw surf mask to only include areas within the buffered water
     # This excludes bright land features and areas very close to land
-    # --- FIX: Directly use the provided water_area_mask for refinement ---
     refined_surf_mask = initial_surf_mask_raw & water_area_mask
 
-    # Ensure it's chunked and boolean
-    refined_surf_mask = refined_surf_mask.chunk({"x": 512, "y": 512}).astype(bool)
-
-    # 3. Perform the final binary dilation to create the desired buffer around surf areas
-    final_dilated_surf_mask = oda_binary_dilation(
-        refined_surf_mask, radius=surf_dilation_radius
-    )
+    if do_dilation:
+        # 3. Perform the final binary dilation to create the desired buffer around surf areas
+        rechunked = refined_surf_mask.chunk({"x": 512, "y": 512})
+        refined_surf_mask = binary_dilation(
+            rechunked, radius=surf_dilation_radius
+        ).compute()
 
     # 4. Return the masked dataset or the final mask
     # The surf areas are to be ELIMINATED (masked out for seagrass habitats).
-    # So, the mask to return for `apply_mask` for *keeping* desired areas should be `~final_dilated_surf_mask`.
-    mask_to_return_for_keeping = ~final_dilated_surf_mask
-
-    return apply_mask(ds, mask_to_return_for_keeping, ds_to_mask, return_mask)
+    return apply_mask(ds, refined_surf_mask, ds_to_mask, return_mask)
 
 
 def mask_deeps(
@@ -140,10 +112,9 @@ def mask_deeps(
         return_mask (bool, optional): If True, returns the mask as well. Defaults to False.
 
     Returns:
-        Dataset: Masked dataset
+        Dataset: Masked dataset, which is 1 for deep water, 0 for not
     """
-    mask = ds.ln_bg < threshold
-    # mask = mask_cleanup(mask, [["erosion", 5], ["dilation", 5]])
+    mask = ds.ln_bg > threshold
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
@@ -154,7 +125,9 @@ def mask_elevation(
     threshold: float = 10,
     return_mask: bool = False,
 ) -> Dataset:
-
+    """
+    Mask elevation. Returns 1 for high areas, 0 for low
+    """
     e84_catalog = "https://earth-search.aws.element84.com/v1/"
     e84_client = Client.open(e84_catalog)
     collection = "cop-dem-glo-30"
@@ -167,36 +140,34 @@ def mask_elevation(
     elevation = load(items, measurements=["data"], geobox=ds.odc.geobox).squeeze()
 
     # True where data is above 10m elevation
-    mask = elevation.data < threshold
+    mask = elevation.data > threshold
 
     return apply_mask(ds, mask, ds_to_mask, return_mask)
 
 
 def all_masks(
-    ds: Dataset,
-    return_mask: bool = False,
+    ds: Dataset, return_mask: bool = False, log: Logger = Logger("mask")
 ) -> Dataset:
-    print("Applying land mask...")
-    # Get the water_area_mask (True for WATER, False for LAND/SWIR_BRIGHT)
-    _, water_area_mask = mask_land(ds, return_mask=True)
+    log.info("Applying land mask...")
+    _, land_mask = mask_land(ds, return_mask=True)
 
-    print("Applying deeps mask...")
+    log.info("Applying deeps mask...")
     _, deeps_mask = mask_deeps(ds, return_mask=True)
-    print("Applying elevation mask...")
+
+    log.info("Applying elevation mask...")
     _, elevation_mask = mask_elevation(ds, return_mask=True)
 
-    # Pass the water_area_mask to mask_surf
-    # mask_surf will return a mask that is True for NON-SURF areas (areas to KEEP)
-    print("Applying surf mask...")
-    # water_area_mask is no longer passed here, as mask_surf computes it internally
-    _, surf_mask_for_keeping = mask_surf(
+    # Pass the land_mask to mask_surf
+    log.info("Applying surf mask...")
+    _, surf_mask = mask_surf(
         ds=ds,
+        water_area_mask=~land_mask,
         return_mask=True,
         # You can also pass surf_blue_threshold, surf_green_threshold, etc. here if you want to customize them
     )
 
-    # Combine all masks. All individual masks are now True for areas to KEEP.
-    print("Combining all masks...")
-    mask = water_area_mask & deeps_mask & elevation_mask & surf_mask_for_keeping
+    # Combine all masks. All individual masks are now False for areas to KEEP.
+    log.info("Combining all masks...")
+    mask = land_mask | deeps_mask | elevation_mask | surf_mask
 
-    return apply_mask(ds, mask, None, return_mask)
+    return apply_mask(ds, ~mask, None, return_mask)
