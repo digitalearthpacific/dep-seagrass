@@ -4,6 +4,7 @@ FROM ghcr.io/osgeo/gdal:ubuntu-full-3.10.0
 ENV USE_PYGEOS=0
 
 RUN apt-get update && apt-get install -y \
+    htop \
     python3-pip \
     python3-dev \
     git \
