@@ -1,3 +1,4 @@
+from pathlib import Path
 from zipfile import ZipFile
 
 import boto3
@@ -29,6 +30,7 @@ def main(
     fast_mode: bool = True,
     xy_chunk_size: int = 1024,
     asset_url_prefix: str | None = None,
+    decimated: bool = False,
     overwrite: Annotated[bool, typer.Option()] = False,
 ) -> None:
     log = get_logger(tile_id, "seagrass")
@@ -37,6 +39,11 @@ def main(
     tile_index = tuple(int(i) for i in tile_id.split(","))
     grid = PACIFIC_GRID_10
     geobox = grid.tile_geobox(tile_index)
+
+    if decimated:
+        geobox = geobox.zoom_out(10)
+
+    print(geobox.shape)
 
     # Make sure we can access S3
     log.info("Configuring S3 access")
@@ -47,19 +54,22 @@ def main(
     # Download the model if we need to
     if model.startswith("https://"):
         model_local = "classification/models/" + model.split("/")[-1]
-        log.info(f"Downloading model from {model} to {model_local}")
-        r = requests.get(model)
-        with open(model_local, "wb") as f:
-            f.write(r.content)
+        if not Path(model_local).exists():
+            log.info(f"Downloading model from {model} to {model_local}")
+            r = requests.get(model)
+            with open(model_local, "wb") as f:
+                f.write(r.content)
 
         model = model_local
 
     if model.endswith(".zip"):
-        log.info("Unzipping model")
-        with ZipFile(model, "r") as zip_ref:
-            zip_ref.extractall(path="classification/models/")
+        unzipped = "classification/models/" + model.split("/")[-1].replace(".zip", "")
+        if not Path(unzipped).exists():
+            log.info("Unzipping model")
+            with ZipFile(model, "r") as zip_ref:
+                zip_ref.extractall(path="classification/models/")
 
-        model = "classification/models/" + model.split("/")[-1].replace(".zip", "")
+        model = unzipped
         log.info(f"Unzipped model to {model}")
 
     # Make sure we can open the model now
@@ -75,12 +85,13 @@ def main(
         dataset_id="seagrass",
         version=version,
         time=datetime,
+        full_path_prefix=asset_url_prefix,
     )
-    stac_document = itempath.stac_path(tile_id)
+    stac_url = itempath.stac_path(tile_id)
 
     # If we don't want to overwrite, and the destination file already exists, skip it
-    if not overwrite and object_exists(output_bucket, stac_document, client=client):
-        log.info(f"Item already exists at {stac_document}")
+    if not overwrite and object_exists(output_bucket, stac_url, client=client):
+        log.info(f"Item already exists at {itempath.stac_path(tile_id, absolute=True)}")
         # This is an exit with success
         raise typer.Exit()
 
@@ -122,13 +133,7 @@ def main(
         log=log,
     )
 
-    stac_creator = StacCreator(
-        itempath=itempath,
-        remote=True,
-        make_hrefs_https=True,
-        with_raster=True,
-        asset_url_prefix=asset_url_prefix,
-    )
+    stac_creator = StacCreator(itempath=itempath, with_raster=True)
 
     try:
         client = Client(n_workers=4, threads_per_worker=16, memory_limit="8GB")
@@ -153,7 +158,7 @@ def main(
         client.close()
 
     log.info(
-        f"Completed processing. Wrote {len(paths)} items to {stac_creator.stac_url(tile_id)}"
+        f"Completed processing. Wrote {len(paths)} items to {itempath.stac_path(tile_id, absolute=True)}"
     )
 
 
