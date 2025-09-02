@@ -2,13 +2,12 @@ from logging import Logger
 
 import xarray as xr
 from dep_tools.processors import Processor
-
 from masking import all_masks
 from utils import (
     calculate_band_indices,
     do_prediction,
-    probability_binary,
     extract_single_class,
+    probability_binary,
     scale,
     texture,
 )

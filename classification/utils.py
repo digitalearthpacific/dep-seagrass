@@ -296,6 +296,9 @@ def do_prediction(ds, model, target_class_id: int = 4):
     # Replace any NaN values with 0 and transpose to the right shape
     stacked_arrays = stacked_arrays.squeeze().fillna(0).transpose().to_pandas()
 
+    # Sort the columns by name
+    stacked_arrays = stacked_arrays.reindex(sorted(stacked_arrays.columns), axis=1)
+
     # Remove the all-zero rows
     # This should make it MUCH MUCH faster, as we're not processing masked areas
     zero_mask = (stacked_arrays == 0).all(axis=1)

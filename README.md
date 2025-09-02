@@ -13,5 +13,14 @@ For any issues with json syntax and conflict resolution, I suggest you copy all 
 Run the command locally or on the DEP Hub to test:
 
 ``` bash
-python src/run_task.py --tile-id 64,20 --datetime 2024 --version test --output-bucket dep-public-prod
+python classification/run_task.py --tile-id 64,20 --datetime 2024 --version test --output-bucket dep-public-prod
+```
+
+
+Run this command to do multiple years in bash
+
+``` bash
+for year in {2019..2024}; do
+  python classification/run_task.py --tile-id 64,20 --datetime $year --version test --output-bucket dep-public-prod
+done
 ```

@@ -1,4 +1,8 @@
+from zipfile import ZipFile
+
 import boto3
+import joblib
+import requests
 import typer
 from dask.distributed import Client
 from dep_tools.aws import object_exists
@@ -10,11 +14,9 @@ from dep_tools.searchers import PystacSearcher
 from dep_tools.stac_utils import StacCreator
 from dep_tools.task import AwsStacTask as Task
 from dep_tools.utils import get_logger
-import joblib
 from odc.stac import configure_s3_access
-from typing_extensions import Annotated
-
 from processor import SeagrassProcessor
+from typing_extensions import Annotated
 
 
 def main(
@@ -22,7 +24,7 @@ def main(
     datetime: Annotated[str, typer.Option()],
     version: Annotated[str, typer.Option()],
     output_bucket: str = None,
-    model: str = "classification/models/nm-27072025-test.model",
+    model: str = "classification/models/20250902c-alex.model",
     probability_threshold: int = 60,
     fast_mode: bool = True,
     xy_chunk_size: int = 1024,
@@ -41,6 +43,31 @@ def main(
     configure_s3_access(cloud_defaults=True)
 
     client = boto3.client("s3")
+
+    # Download the model if we need to
+    if model.startswith("https://"):
+        model_local = "classification/models/" + model.split("/")[-1]
+        log.info(f"Downloading model from {model} to {model_local}")
+        r = requests.get(model)
+        with open(model_local, "wb") as f:
+            f.write(r.content)
+
+        model = model_local
+
+    if model.endswith(".zip"):
+        log.info("Unzipping model")
+        with ZipFile(model, "r") as zip_ref:
+            zip_ref.extractall(path="classification/models/")
+
+        model = "classification/models/" + model.split("/")[-1].replace(".zip", "")
+        log.info(f"Unzipped model to {model}")
+
+    # Make sure we can open the model now
+    try:
+        joblib.load(model)
+    except Exception as e:
+        log.exception(f"Failed to load model from {model}: {e}")
+        typer.Exit(code=1)
 
     itempath = S3ItemPath(
         bucket=output_bucket,
@@ -104,24 +131,26 @@ def main(
     )
 
     try:
-        with Client(n_workers=4, threads_per_worker=16, memory_limit="8GB"):
-            log.info(("Started dask client"))
-            paths = Task(
-                itempath=itempath,
-                id=tile_index,
-                area=geobox,
-                searcher=searcher,
-                loader=loader,
-                processor=processor,
-                logger=log,
-                stac_creator=stac_creator,
-            ).run()
+        client = Client(n_workers=4, threads_per_worker=16, memory_limit="8GB")
+        log.info(("Started dask client"))
+        paths = Task(
+            itempath=itempath,
+            id=tile_index,
+            area=geobox,
+            searcher=searcher,
+            loader=loader,
+            processor=processor,
+            logger=log,
+            stac_creator=stac_creator,
+        ).run()
     except EmptyCollectionError:
         log.info("No items found for this tile")
         raise typer.Exit()  # Exit with success
     except Exception as e:
         log.exception(f"Failed to process with error: {e}")
         raise typer.Exit(code=1)
+    finally:
+        client.close()
 
     log.info(
         f"Completed processing. Wrote {len(paths)} items to {stac_creator.stac_url(tile_id)}"
