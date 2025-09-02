@@ -3,6 +3,7 @@ dep-tools @ git+https://github.com/digitalearthpacific/dep-tools.git@handle-stac
 GDAL==3.10.0
 geopandas
 joblib
+numba
 numpy
 odc-stac
 pandas
