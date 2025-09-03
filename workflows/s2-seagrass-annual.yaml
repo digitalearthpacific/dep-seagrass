@@ -19,17 +19,19 @@ spec:
   arguments:
     parameters:
       - name: version
-        value: "0.0.1" # The version of the data product being made
+        value: "0.1.0" # The version of the data product being made
       - name: image-name
         value: "dep-seagrass" # The Docker image
       - name: base-product
         value: "s2"
       - name: image-tag
-        value: "b157136"
+        value: "0.1.0-1-g47db8e5"
       - name: bucket
         value: "dep-public-staging" # The bucket to store the data
       - name: overwrite
         value: "--no-overwrite" # Can be "--overwrite" or "--no-overwrite"
+      - name: model
+        value: "https://files.auspatious.com/dep_s2_seagrass/models/20250902c-alex.model.zip"
   templates:
     - name: workflow-entrypoint
       dag:
@@ -63,6 +65,8 @@ spec:
                   value: "{{ workflow.parameters.bucket }}"
                 - name: overwrite
                   value: "{{ workflow.parameters.overwrite }}"
+                - name: model
+                  value: "{{ workflow.parameters.model }}"
             withParam: "{{ tasks.generate-ids.outputs.result }}"
 
     - name: generate
@@ -82,7 +86,7 @@ spec:
             cpu: 1.0
         command: [python]
         args:
-          - src/print_tasks.py
+          - classification/print_tasks.py
           - --years
           - "{{ inputs.parameters.years }}"
           - --version
@@ -94,6 +98,9 @@ spec:
           - "{{ inputs.parameters.overwrite }}"
 
     - name: process
+      retryStrategy:
+        retryPolicy: OnError
+        limit: "2"
       inputs:
         parameters:
           - name: tile-id
@@ -101,6 +108,7 @@ spec:
           - name: version
           - name: bucket
           - name: overwrite
+          - name: model
       container:
         image: "ghcr.io/digitalearthpacific/{{ workflow.parameters.image-name }}:{{ workflow.parameters.image-tag }}"
         imagePullPolicy: IfNotPresent
@@ -110,10 +118,10 @@ spec:
             memory: 64Gi
           limits:
             cpu: 8
-            memory: 64Gi
+            memory: 80Gi
         command: [python]
         args:
-          - src/run_task.py
+          - classification/run_task.py
           - --tile-id
           - "{{ inputs.parameters.tile-id }}"
           - --datetime
@@ -122,6 +130,8 @@ spec:
           - "{{ inputs.parameters.version }}"
           - --output-bucket
           - "{{ inputs.parameters.bucket }}"
+          - --model
+          - "{{ inputs.parameters.model }}"
           - "{{ inputs.parameters.overwrite }}"
       env:
         - name: DASK_ARRAY__RECHUNK__METHOD
