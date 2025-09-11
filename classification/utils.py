@@ -16,10 +16,18 @@ def scale(data):
     Returns:
     xr.Dataset: The scaled dataset with values clipped between 0 and 1.
     """
+    # Stack nodata
+    nodata = data.red == 0
+    # Pull out the mad bands, we don't scale them
     mad_bands = ["smad", "emad", "bcmad"]
+
+    # Scale the other bands
     data_mad = data[mad_bands]
     non_mad_bands = data[list(set(data.data_vars) - set(mad_bands))].astype("float32")
     scaled = (non_mad_bands * 0.0001).clip(0, 1)
+
+    # Stack the nodata back on
+    scaled = scaled.where(~nodata, np.nan)
 
     return xr.merge([scaled, data_mad])
 
