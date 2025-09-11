@@ -8,7 +8,7 @@ spec:
   podGC:
     strategy: OnWorkflowSuccess
     deleteDelayDuration: 600s
-  parallelism: 50
+  parallelism: 100
   podMetadata:
     labels:
       app: s2-seagrass
@@ -25,7 +25,7 @@ spec:
       - name: base-product
         value: "s2"
       - name: image-tag
-        value: "0.2.0"
+        value: "0.2.0-2-g155bea0"
       - name: bucket
         value: "dep-public-staging" # The bucket to store the data
       - name: overwrite
@@ -43,7 +43,7 @@ spec:
                 - name: limit
                   value: "999"
                 - name: years
-                  value: "2024" # One year "2022", or a period "2020-2021"
+                  value: "2017" # One year "2022", or a period "2020-2021"
                 - name: version
                   value: "{{ workflow.parameters.version }}"
                 - name: bucket
@@ -109,13 +109,13 @@ spec:
           - name: bucket
           - name: overwrite
           - name: model
-        tolerations:
-          - key: "example-key"
-            operator: "Exists"
-            effect: "NoSchedule"
-        metadata:
-          annotations:
-            example.com/annotation: "true"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      metadata:
+        annotations:
+          node.kubernetes.io/instance-type: "g6.2xlarge"
       container:
         image: "ghcr.io/digitalearthpacific/{{ workflow.parameters.image-name }}:{{ workflow.parameters.image-tag }}"
         imagePullPolicy: IfNotPresent

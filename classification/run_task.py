@@ -136,7 +136,7 @@ def main(
     stac_creator = StacCreator(itempath=itempath, with_raster=True)
 
     try:
-        client = Client(n_workers=4, threads_per_worker=16, memory_limit="8GB")
+        client = Client(n_workers=4, threads_per_worker=16, memory_limit="12GB")
         log.info(("Started dask client"))
         paths = Task(
             itempath=itempath,
