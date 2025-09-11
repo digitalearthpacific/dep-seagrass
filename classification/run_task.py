@@ -43,8 +43,6 @@ def main(
     if decimated:
         geobox = geobox.zoom_out(10)
 
-    print(geobox.shape)
-
     # Make sure we can access S3
     log.info("Configuring S3 access")
     configure_s3_access(cloud_defaults=True)
